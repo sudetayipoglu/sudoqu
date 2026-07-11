@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "baslik": "nasıl sudolanır?",
+    "atanan": "belirsiz",
+    "tur": "toplanti",
+    "deadline": null,
+    "durum": "bekliyor",
+    "olusturma_tarihi": "2026-07-11 23:43"
+  },
+  {
+    "id": 2,
+    "baslik": "nasıl sudolanmaz?",
+    "atanan": "belirsiz",
+    "tur": "task",
+    "deadline": "2026.07.13",
+    "durum": "bekliyor",
+    "olusturma_tarihi": "2026-07-11 23:44"
+  }
+]
