@@ -18,7 +18,104 @@ from google.genai import types
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-GEMINI_MODEL = "gemini-flash-latest"
+
+# TEKILLESTIRME (DEDUP) MANTIGI - kural bazli, LLM kullanilmaz
+import re
+import difflib as _difflib
+from collections import defaultdict as _defaultdict
+from datetime import datetime as _datetime
+
+_DEDUP_ALANLAR = [
+    "organizator", "konu_kategori", "son_basvuru_tarihi", "onemli_tarihler",
+    "basvuru_asamalari", "yer_mekan", "konaklama_yol_destegi", "odul_miktari_turu",
+    "katilim_sartlari", "takim_buyuklugu_limiti", "basvuru_maliyeti",
+    "istenen_materyal", "sponsor_kurumlar",
+]
+
+
+def _normalize_organizator(s):
+    if not s:
+        return None
+    return re.sub(r"\s+", " ", s.strip().lower())
+
+
+def _tarih_parse(s):
+    if not s:
+        return None
+    try:
+        return _datetime.strptime(s.strip(), "%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def _doluluk(r):
+    return sum(1 for f in _DEDUP_ALANLAR if r.get(f) not in (None, "", "null"))
+
+
+def tekillestir(veri_listesi):
+    gruplar = _defaultdict(list)
+    for r in veri_listesi:
+        org = r.get("organizator")
+        norm = _normalize_organizator(org)
+        if not norm:
+            continue
+        gruplar[norm].append(r)
+
+    dup_sayisi = 0
+    dup_gruplari = []
+
+    for org_norm, kayitlar in gruplar.items():
+        n = len(kayitlar)
+        if n < 2:
+            continue
+        used = set()
+        for i in range(n):
+            if i in used:
+                continue
+            grup_idx = [i]
+            for j in range(i + 1, n):
+                if j in used:
+                    continue
+                ri, rj = kayitlar[i], kayitlar[j]
+
+                ti = _tarih_parse(ri.get("son_basvuru_tarihi"))
+                tj = _tarih_parse(rj.get("son_basvuru_tarihi"))
+                if ti is None or tj is None:
+                    tarih_yakin = False
+                else:
+                    tarih_yakin = abs((ti - tj).days) <= 1
+
+                konu_i = (ri.get("konu_kategori") or ri.get("baslik") or "").lower()
+                konu_j = (rj.get("konu_kategori") or rj.get("baslik") or "").lower()
+                if konu_i and konu_j:
+                    benzerlik = _difflib.SequenceMatcher(None, konu_i, konu_j).ratio()
+                else:
+                    benzerlik = 0.0
+                konu_benzer = benzerlik >= 0.6
+
+                if tarih_yakin and konu_benzer:
+                    grup_idx.append(j)
+
+            if len(grup_idx) > 1:
+                for idx in grup_idx:
+                    used.add(idx)
+                grup_kayitlar = [kayitlar[idx] for idx in grup_idx]
+                grup_kayitlar.sort(key=_doluluk, reverse=True)
+                birincil = grup_kayitlar[0]
+                if "duplicate_of" in birincil:
+                    del birincil["duplicate_of"]
+                for ikincil in grup_kayitlar[1:]:
+                    ikincil["duplicate_of"] = birincil.get("link")
+                    dup_sayisi += 1
+                dup_gruplari.append({
+                    "organizator": org_norm,
+                    "birincil": birincil.get("link"),
+                    "ikincil_sayisi": len(grup_kayitlar) - 1,
+                    "linkler": [k.get("link") for k in grup_kayitlar],
+                })
+
+    return dup_sayisi, dup_gruplari
+GEMINI_MODEL = "gemini-flash-lite-latest"  # gemini-2.5-flash-lite artik 404 (deprecated); bu alias canli test edildi, su an gemini-3.1-flash-lite'e cozuluyor
 GEMINI_MIN_INTERVAL = 13
 GEMINI_429_WAIT = 60
 GEMINI_MAX_RETRIES = 2
@@ -26,7 +123,7 @@ GEMINI_MAX_RETRIES = 2
 # DIKKAT: Bu deger islenecek 'henuz_islenmedi' kayit sayisini sinirlar.
 # Test amacli kucuk tutulmali; tum birikmis kayitlara karsi calistirmadan once
 # KULLANICI ONAYI alinmalidir. Onaydan sonra bu degeri artirin ya da None yapin.
-TEST_LIMIT = 15
+TEST_LIMIT = None
 
 
 class OpportunityExtract(BaseModel):
@@ -75,8 +172,11 @@ def call_gemini_extract(url, raw_content):
 Bu metinden bir yarisma / hackathon / burs / fuar / program firsatina dair
 yapilandirilmis bilgiyi asagidaki semaya gore cikar.
 
-COK ONEMLI KURAL: Bu bilgiyi metinde acikca bulamiyorsan o alani null birak.
-ASLA UYDURMA, tahmin etme, varsayma. Sadece metinde gecen bilgiyi kullan.
+COK ONEMLI KURALLAR:
+1. Bu bilgiyi metinde acikca bulamiyorsan o alani null birak. ASLA UYDURMA, tahmin etme, varsayma. Sadece metinde gecen bilgiyi kullan.
+2. Kaynak metin hangi dilde olursa olsun, TUM cikti alanlarini TURKCEYE CEVIREREK yaz.
+3. Tarihleri HER ZAMAN YYYY-MM-DD formatina normalize et (tahmin edilebiliyorsa), yoksa null birak.
+4. onemli_tarihler alanina birden fazla tarih varsa (basvuru baslangici, on eleme, final gibi), hepsini TEK BIR serbest metin string'i icinde, virgul veya noktayla ayirarak yaz - ASLA liste/array dondurme, her zaman tek bir string olmali.
 
 Kaynak URL: {url}
 
@@ -221,25 +321,28 @@ for kelime in genel_kategoriler["ko"] + loanword_ko + programlar_ko:
 for kelime in genel_kategoriler["zh"] + loanword_zh + programlar_zh:
     sorgular.append(f"{kelime} {yil}")
 
-print(f"Toplam {len(sorgular)} sorgu ile tarama başlıyor...\n")
-
 bulunanlar = {}
 
-for i, sorgu in enumerate(sorgular, 1):
-    print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
-    try:
-        response = client.search(query=sorgu)
-        for result in response["results"]:
-            url = result["url"]
-            if url not in bulunanlar:
-                bulunanlar[url] = {
-                    "baslik": result["title"],
-                    "link": url,
-                    "kaynak_sorgu": sorgu,
-                    "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
-                }
-    except Exception as e:
-        print(f"  Hata: {e}")
+SKIP_SEARCH = os.getenv("RADAR_SKIP_SEARCH", "0") == "1"
+if SKIP_SEARCH:
+    print("RADAR_SKIP_SEARCH=1: yeni arama atlaniyor, sadece mevcut henuz_islenmedi kayitlar icin extraction calisacak.\n")
+else:
+    print(f"Toplam {len(sorgular)} sorgu ile tarama başlıyor...\n")
+    for i, sorgu in enumerate(sorgular, 1):
+        print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
+        try:
+            response = client.search(query=sorgu)
+            for result in response["results"]:
+                url = result["url"]
+                if url not in bulunanlar:
+                    bulunanlar[url] = {
+                        "baslik": result["title"],
+                        "link": url,
+                        "kaynak_sorgu": sorgu,
+                        "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    }
+        except Exception as e:
+            print(f"  Hata: {e}")
 
 try:
     with open("firsatlar.json", "r", encoding="utf-8") as f:
@@ -292,8 +395,13 @@ for idx, kayit in enumerate(islenecekler):
     if sonuc:
         toplam_in_token += sonuc["input_tokens"]
         toplam_out_token += sonuc["output_tokens"]
+    json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
         _time.sleep(GEMINI_MIN_INTERVAL)
+
+_dup_sayisi, _dup_gruplari = tekillestir(list(mevcut_dict.values()))
+if _dup_sayisi:
+    print(f"\nTekillestirme: {len(_dup_gruplari)} grup, toplam {_dup_sayisi} kayit duplicate olarak isaretlendi.")
 
 with open("firsatlar.json", "w", encoding="utf-8") as f:
     json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
