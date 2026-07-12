@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>SudoQu</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+  h1 { color: #2c3e50; }
+  .sekmeler { margin-bottom: 20px; }
+  .sekmeler button { padding: 10px 20px; margin-right: 5px; border: none; background: #ddd; cursor: pointer; border-radius: 5px; }
+  .sekmeler button.aktif { background: #2c3e50; color: white; }
+  .kart { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .kart a { color: #2980b9; text-decoration: none; }
+  .bolum { display: none; }
+  .bolum.aktif { display: block; }
+  .durum-etiket { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #f39c12; color: white; }
+</style>
+</head>
+<body>
+
+<h1>🚀 SudoQu</h1>
+
+<div class="sekmeler">
+  <button class="aktif" onclick="sekmeGoster('firsatlar')">Fırsatlar</button>
+  <button onclick="sekmeGoster('tasklar')">Task & Takvim</button>
+  <button onclick="sekmeGoster('basvurular')">Başvurularım</button>
+</div>
+
+<div id="firsatlar" class="bolum aktif">
+  <h2>Bulunan Fırsatlar</h2>
+  <div id="firsatlar-liste">Yükleniyor...</div>
+</div>
+
+<div id="tasklar" class="bolum">
+  <h2>Task & Takvim</h2>
+  <div id="tasklar-liste">Yükleniyor...</div>
+</div>
+
+<div id="basvurular" class="bolum">
+  <h2>Başvurularım</h2>
+  <div id="basvurular-liste">Yükleniyor...</div>
+</div>
+
+<script>
+const API_ADRESI = "http://34.30.225.219:8000";
+
+function sekmeGoster(id) {
+  document.querySelectorAll('.bolum').forEach(b => b.classList.remove('aktif'));
+  document.querySelectorAll('.sekmeler button').forEach(b => b.classList.remove('aktif'));
+  document.getElementById(id).classList.add('aktif');
+  event.target.classList.add('aktif');
+}
+
+async function firsatlariYukle() {
+  const res = await fetch(`${API_ADRESI}/firsatlar`);
+  const veri = await res.json();
+  const kutu = document.getElementById('firsatlar-liste');
+  kutu.innerHTML = veri.slice(0, 50).map(f => `
+    <div class="kart">
+      <strong>${f.baslik}</strong><br>
+      <a href="${f.link}" target="_blank">${f.link}</a><br>
+      <small>Bulunma: ${f.bulunma_tarihi}</small><br>
+      <button onclick="basvur('${f.link.replace(/'/g, "\\'")}')">Başvur olarak işaretle</button>
+    </div>
+  `).join('');
+}
+
+async function taskYukle() {
+  const res = await fetch(`${API_ADRESI}/tasklar`);
+  const veri = await res.json();
+  const kutu = document.getElementById('tasklar-liste');
+  if (veri.length === 0) {
+    kutu.innerHTML = "Henüz task yok.";
+    return;
+  }
+  kutu.innerHTML = veri.map(t => `
+    <div class="kart">
+      <strong>${t.baslik}</strong> <span class="durum-etiket">${t.durum}</span><br>
+      Atanan: ${t.atanan} | Tür: ${t.tur}<br>
+      Deadline: ${t.deadline || 'yok'}
+    </div>
+  `).join('');
+}
+
+async function basvurulariYukle() {
+  const res = await fetch(`${API_ADRESI}/basvurular`);
+  const veri = await res.json();
+  const kutu = document.getElementById('basvurular-liste');
+  const liste = Object.values(veri);
+  if (liste.length === 0) {
+    kutu.innerHTML = "Henüz başvuru yok.";
+    return;
+  }
+  kutu.innerHTML = liste.map(b => `
+    <div class="kart">
+      <strong>${b.baslik}</strong><br>
+      Durum: ${b.durum}
+    </div>
+  `).join('');
+}
+
+async function basvur(link) {
+  await fetch(`${API_ADRESI}/basvurular/${encodeURIComponent(link)}`, { method: 'POST' });
+  alert('Başvuru olarak işaretlendi!');
+  basvurulariYukle();
+}
+
+firsatlariYukle();
+taskYukle();
+basvurulariYukle();
+</script>
+
+</body>
+</html>
