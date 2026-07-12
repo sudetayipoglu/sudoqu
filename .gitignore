@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 frontend/node_modules/
 frontend/.next/
+backend/firsatlar.json
+backend/radar_log.txt
+backend/pilot_raw_results.json
+backend/pilot_run_log.txt

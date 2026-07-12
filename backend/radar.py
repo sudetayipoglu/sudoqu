@@ -8,6 +8,166 @@ load_dotenv()
 api_key = os.getenv("TAVILY_API_KEY")
 client = TavilyClient(api_key=api_key)
 
+# --- V1.3: Tavily Extract + Gemini yapisal veri cikarim pipeline'i (pilot testte dogrulandi) ---
+import time as _time
+from urllib.parse import urlparse
+from typing import Optional
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_MIN_INTERVAL = 13
+GEMINI_429_WAIT = 60
+GEMINI_MAX_RETRIES = 2
+
+# DIKKAT: Bu deger islenecek 'henuz_islenmedi' kayit sayisini sinirlar.
+# Test amacli kucuk tutulmali; tum birikmis kayitlara karsi calistirmadan once
+# KULLANICI ONAYI alinmalidir. Onaydan sonra bu degeri artirin ya da None yapin.
+TEST_LIMIT = 15
+
+
+class OpportunityExtract(BaseModel):
+    organizator: Optional[str] = None
+    konu_kategori: Optional[str] = None
+    son_basvuru_tarihi: Optional[str] = None
+    onemli_tarihler: Optional[str] = None
+    basvuru_asamalari: Optional[str] = None
+    yer_mekan: Optional[str] = None
+    konaklama_yol_destegi: Optional[bool] = None
+    odul_miktari_turu: Optional[str] = None
+    katilim_sartlari: Optional[str] = None
+    takim_buyuklugu_limiti: Optional[str] = None
+    basvuru_maliyeti: Optional[str] = None
+    istenen_materyal: Optional[str] = None
+    sponsor_kurumlar: Optional[str] = None
+
+
+EXTRACTION_FIELDS = list(OpportunityExtract.model_fields.keys())
+
+
+def is_root_page(url):
+    try:
+        path = urlparse(url).path.strip("/")
+        return path == ""
+    except Exception:
+        return False
+
+
+def call_tavily_extract(tavily_client, url):
+    try:
+        result = tavily_client.extract(urls=[url], extract_depth="advanced", chunks_per_source=3)
+        results = result.get("results", [])
+        failed = result.get("failed_results", [])
+        if results:
+            raw = results[0].get("raw_content") or ""
+            return {"success": True, "raw_content": raw, "char_count": len(raw), "error": None}
+        err = failed[0].get("error") if failed else "bilinmeyen hata (bos sonuc)"
+        return {"success": False, "raw_content": "", "char_count": 0, "error": err}
+    except Exception as e:
+        return {"success": False, "raw_content": "", "char_count": 0, "error": str(e)}
+
+
+def call_gemini_extract(url, raw_content):
+    prompt = f"""Asagida bir web sayfasindan/PDF'ten Tavily ile cikarilmis ham metin var.
+Bu metinden bir yarisma / hackathon / burs / fuar / program firsatina dair
+yapilandirilmis bilgiyi asagidaki semaya gore cikar.
+
+COK ONEMLI KURAL: Bu bilgiyi metinde acikca bulamiyorsan o alani null birak.
+ASLA UYDURMA, tahmin etme, varsayma. Sadece metinde gecen bilgiyi kullan.
+
+Kaynak URL: {url}
+
+--- HAM METIN BASLANGICI ---
+{raw_content[:20000]}
+--- HAM METIN SONU ---
+"""
+    last_err = None
+    for attempt in range(GEMINI_MAX_RETRIES + 1):
+        try:
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=OpportunityExtract,
+                ),
+            )
+            usage = response.usage_metadata
+            return {
+                "success": True,
+                "parsed": response.parsed.model_dump() if response.parsed else None,
+                "input_tokens": usage.prompt_token_count if usage else 0,
+                "output_tokens": usage.candidates_token_count if usage else 0,
+                "error": None,
+            }
+        except Exception as e:
+            last_err = str(e)
+            gecici_hata = ("429" in last_err) or ("503" in last_err) or ("UNAVAILABLE" in last_err)
+            if gecici_hata and attempt < GEMINI_MAX_RETRIES:
+                wait_s = GEMINI_429_WAIT if "429" in last_err else 20
+                print(f"    -> gecici hata, {wait_s}sn beklenip tekrar denenecek (deneme {attempt + 1}/{GEMINI_MAX_RETRIES}): {last_err[:80]}")
+                _time.sleep(wait_s)
+                continue
+            break
+    return {"success": False, "parsed": None, "input_tokens": 0, "output_tokens": 0, "error": last_err}
+
+
+def bos_extraction_alanlari():
+    return {alan: None for alan in EXTRACTION_FIELDS}
+
+
+def extract_tek_kayit(tavily_client, kayit):
+    """Tek bir firsat kaydi icin extraction calistirir, kaydi yerinde gunceller."""
+    url = kayit.get("link", "")
+    simdi = datetime.now().isoformat(timespec="seconds")
+
+    if is_root_page(url):
+        kayit.update(bos_extraction_alanlari())
+        kayit["extraction_durumu"] = "atlandi_genel_sayfa"
+        kayit["extraction_tarihi"] = simdi
+        print(f"  [atlandi_genel_sayfa] {url}")
+        return None
+
+    tav = call_tavily_extract(tavily_client, url)
+    if not tav["success"]:
+        kayit.update(bos_extraction_alanlari())
+        kayit["extraction_durumu"] = "basarisiz"
+        kayit["extraction_tarihi"] = simdi
+        print(f"  [basarisiz] tavily hatasi: {tav['error']} - {url}")
+        return None
+
+    if tav["char_count"] == 0:
+        kayit.update(bos_extraction_alanlari())
+        kayit["extraction_durumu"] = "basarili"
+        kayit["extraction_tarihi"] = simdi
+        print(f"  [basarili] icerik bos, alanlar null - {url}")
+        return None
+
+    if gemini_client is None:
+        kayit["extraction_durumu"] = "basarisiz"
+        kayit["extraction_tarihi"] = simdi
+        print(f"  [basarisiz] GEMINI_API_KEY yok - {url}")
+        return None
+
+    gem = call_gemini_extract(url, tav["raw_content"])
+    if gem["success"]:
+        for alan in EXTRACTION_FIELDS:
+            kayit[alan] = gem["parsed"].get(alan) if gem["parsed"] else None
+        kayit["extraction_durumu"] = "basarili"
+        kayit["extraction_tarihi"] = simdi
+        print(f"  [basarili] in={gem['input_tokens']} out={gem['output_tokens']} - {url}")
+        return {"input_tokens": gem["input_tokens"] or 0, "output_tokens": gem["output_tokens"] or 0}
+
+    kayit.update(bos_extraction_alanlari())
+    kayit["extraction_durumu"] = "basarisiz"
+    kayit["extraction_tarihi"] = simdi
+    print(f"  [basarisiz] gemini hatasi: {gem['error']} - {url}")
+    return None
+# --- V1.3 pipeline sonu ---
+
 yil = datetime.now().year
 
 # Genel kategoriler artık bir bağlam kelimesiyle ("teknoloji" / "girişimcilik") eşleniyor — gürültüyü azaltmak için
@@ -81,7 +241,63 @@ for i, sorgu in enumerate(sorgular, 1):
     except Exception as e:
         print(f"  Hata: {e}")
 
-with open("firsatlar.json", "w", encoding="utf-8") as f:
-    json.dump(list(bulunanlar.values()), f, ensure_ascii=False, indent=2)
+try:
+    with open("firsatlar.json", "r", encoding="utf-8") as f:
+        mevcut_liste = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    mevcut_liste = []
 
-print(f"\nToplam {len(bulunanlar)} benzersiz fırsat bulundu ve firsatlar.json dosyasına kaydedildi.")
+mevcut_dict = {}
+for kayit in mevcut_liste:
+    link = kayit.get("link")
+    if not link:
+        continue
+    for alan in EXTRACTION_FIELDS:
+        kayit.setdefault(alan, None)
+    kayit.setdefault("extraction_durumu", "henuz_islenmedi")
+    kayit.setdefault("extraction_tarihi", None)
+    mevcut_dict[link] = kayit
+
+yeni_sayisi = 0
+for link, kayit in bulunanlar.items():
+    if link not in mevcut_dict:
+        for alan in EXTRACTION_FIELDS:
+            kayit.setdefault(alan, None)
+        kayit["extraction_durumu"] = "henuz_islenmedi"
+        kayit["extraction_tarihi"] = None
+        mevcut_dict[link] = kayit
+        yeni_sayisi += 1
+
+print(f"\nBu turda {len(bulunanlar)} link tarandi, {yeni_sayisi} tanesi yeni. Toplam kayit sayisi (birikmis): {len(mevcut_dict)}")
+
+islenecekler = [k for k in mevcut_dict.values() if k.get("extraction_durumu") == "henuz_islenmedi"]
+if TEST_LIMIT is not None:
+    islenecekler = islenecekler[:TEST_LIMIT]
+
+print(f"Extraction calistirilacak kayit sayisi: {len(islenecekler)} (TEST_LIMIT={TEST_LIMIT})\n")
+
+toplam_in_token, toplam_out_token = 0, 0
+basarili_sayisi, basarisiz_sayisi, atlandi_sayisi = 0, 0, 0
+
+for idx, kayit in enumerate(islenecekler):
+    print(f"[{idx + 1}/{len(islenecekler)}] {kayit.get('baslik', '')[:70]}")
+    sonuc = extract_tek_kayit(client, kayit)
+    durum = kayit.get("extraction_durumu")
+    if durum == "basarili":
+        basarili_sayisi += 1
+    elif durum == "basarisiz":
+        basarisiz_sayisi += 1
+    elif durum == "atlandi_genel_sayfa":
+        atlandi_sayisi += 1
+    if sonuc:
+        toplam_in_token += sonuc["input_tokens"]
+        toplam_out_token += sonuc["output_tokens"]
+    if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
+        _time.sleep(GEMINI_MIN_INTERVAL)
+
+with open("firsatlar.json", "w", encoding="utf-8") as f:
+    json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
+
+print(f"\nToplam {len(mevcut_dict)} benzersiz firsat firsatlar.json dosyasina kaydedildi.")
+print(f"Extraction ozeti: basarili={basarili_sayisi}, basarisiz={basarisiz_sayisi}, atlandi_genel_sayfa={atlandi_sayisi}")
+print(f"Toplam Gemini token: input={toplam_in_token}, output={toplam_out_token}")
