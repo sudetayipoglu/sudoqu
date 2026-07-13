@@ -50,7 +50,7 @@ def firsatlari_getir():
 
 @app.get("/basvurular")
 def basvurulari_getir():
-    return dosya_oku(BASVURULAR_DOSYA, {})
+    return list(dosya_oku(BASVURULAR_DOSYA, {}).values())
 
 @app.post("/basvurular/{link:path}")
 def basvuru_ekle(link: str):
@@ -108,6 +108,27 @@ def task_tamamla(task_id: int):
             dosya_yaz(TASKLAR_DOSYA, tasklar)
             return t
     return {"hata": "Task bulunamadı"}
+
+
+@app.put("/tasklar/{task_id}")
+def task_guncelle(task_id: int, baslik: str = None, atanan: str = None, tur: str = None, deadline: str = None):
+    tasklar = dosya_oku(TASKLAR_DOSYA, [])
+    for t in tasklar:
+        if t["id"] == task_id:
+            if baslik is not None:
+                baslik = baslik.strip()
+                if not baslik:
+                    raise HTTPException(status_code=400, detail="Baslik bos olamaz")
+                t["baslik"] = baslik[:200]
+            if atanan is not None:
+                t["atanan"] = atanan.strip() or "belirsiz"
+            if tur is not None:
+                t["tur"] = tur
+            if deadline is not None:
+                t["deadline"] = deadline or None
+            dosya_yaz(TASKLAR_DOSYA, tasklar)
+            return t
+    raise HTTPException(status_code=404, detail="Task bulunamadi")
 
 
 def _github_repo_bilgisi(github_link: str):

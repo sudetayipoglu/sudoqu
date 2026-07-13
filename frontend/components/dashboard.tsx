@@ -13,6 +13,7 @@ import {
   getOpportunities,
   getTasks,
   getProjeler,
+  getEkip,
   type Application,
   type Opportunity,
   type Task,
@@ -36,11 +37,13 @@ export function Dashboard() {
   const tasks = useSWR<Task[]>("tasklar", getTasks)
   const applications = useSWR<Application[]>("basvurular", getApplications)
   const projeler = useSWR<Proje[]>("projeler", getProjeler)
+  const ekip = useSWR<string[]>("ekip", getEkip)
 
   const opps = opportunities.data ?? []
   const taskList = tasks.data ?? []
   const apps = applications.data ?? []
   const projeList = projeler.data ?? []
+  const ekipList = ekip.data ?? []
 
   const openTasks = taskList.filter((t) => !t.tamamlandi).length
 
@@ -151,7 +154,7 @@ export function Dashboard() {
       ) : (
         <section>
           {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} />}
-          {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} />}
+          {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
           {tab === "basvurular" && <ApplicationsTab items={apps} />}
         {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}
         </section>

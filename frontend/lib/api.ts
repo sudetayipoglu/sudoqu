@@ -128,7 +128,7 @@ export async function getTasks(): Promise<Task[]> {
     tur: pick(r, ["tur", "tür", "type", "kategori", "category"]),
     deadline: pick(r, ["deadline", "son_tarih", "sonTarih", "bitis", "bitiş", "due", "due_date", "dueDate", "tarih"]),
     durum: pick(r, ["durum", "status", "state"], "beklemede"),
-    tamamlandi: pickBool(r, ["tamamlandi", "tamamlandı", "completed", "done", "isDone"]),
+    tamamlandi: pickBool(r, ["tamamlandi", "tamamlandı", "completed", "done", "isDone"]) || String(r.durum ?? "").toLowerCase().includes("tamamlan"),
     raw: r,
   }))
 }
@@ -158,6 +158,36 @@ export async function completeTask(id: string): Promise<void> {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
   })
   if (!res.ok) throw new Error(`Görev tamamlanamadı (${res.status})`)
+}
+
+export async function createTask(baslik: string, atanan: string, tur: string, deadline: string): Promise<void> {
+  const params = new URLSearchParams({ baslik, atanan, tur })
+  if (deadline) params.set("deadline", deadline)
+  const res = await fetch(`${API_BASE}/tasklar?${params.toString()}`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Görev eklenemedi (${res.status})`)
+}
+
+export async function updateTask(id: string, fields: { baslik?: string; atanan?: string; tur?: string; deadline?: string }): Promise<void> {
+  const params = new URLSearchParams()
+  if (fields.baslik !== undefined) params.set("baslik", fields.baslik)
+  if (fields.atanan !== undefined) params.set("atanan", fields.atanan)
+  if (fields.tur !== undefined) params.set("tur", fields.tur)
+  if (fields.deadline !== undefined) params.set("deadline", fields.deadline)
+  const res = await fetch(`${API_BASE}/tasklar/${encodeURIComponent(id)}?${params.toString()}`, {
+    method: "PUT",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Görev güncellenemedi (${res.status})`)
+}
+
+export async function getEkip(): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/ekip`, { headers: { Accept: "application/json" }, cache: "no-store" })
+  if (!res.ok) throw new Error(`Ekip getirilemedi (${res.status})`)
+  const data = await res.json()
+  return Array.isArray(data) ? data.map(String) : []
 }
 
 /* ---------- Projeler (V1.4) ---------- */
