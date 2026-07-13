@@ -137,6 +137,34 @@ def tekillestir(veri_listesi):
                 })
 
     return dup_sayisi, dup_gruplari
+
+
+# ============================================================
+# EFOR/KAZANC ORANI - kural bazli, LLM kullanilmaz
+# istenen_materyal alanindaki anahtar kelimelere gore dusuk/orta/yuksek
+# etiketi hesaplar. Bilgi yoksa None doner (frontend'de "Bilgi yok").
+# ============================================================
+_EFOR_YUKSEK_KELIMELER = [
+    "video", "prototip", "prototype", "demo", "poster", "maket",
+    "bildiri", "tam metin", "sunum", "portfoy", "portföy", "portfolyo",
+    "ornek proje", "örnek proje", "numune", "is plani", "iş planı", "fizibilite",
+]
+_EFOR_ORTA_KELIMELER = [
+    "form", "ozgecmis", "özgeçmiş", "cv", "motivasyon mektubu",
+    "referans mektubu", "proje ozeti", "proje özeti", "oneri", "öneri",
+    "plan", "basvuru formu", "başvuru formu",
+]
+
+
+def efor_kazanc_hesapla(istenen_materyal):
+    if not istenen_materyal:
+        return None
+    s = istenen_materyal.lower()
+    if any(k in s for k in _EFOR_YUKSEK_KELIMELER):
+        return "yuksek"
+    if any(k in s for k in _EFOR_ORTA_KELIMELER):
+        return "orta"
+    return "dusuk"
 GEMINI_MODEL = "gemini-flash-lite-latest"  # gemini-2.5-flash-lite artik 404 (deprecated); bu alias canli test edildi, su an gemini-3.1-flash-lite'e cozuluyor
 GEMINI_MIN_INTERVAL = 13
 GEMINI_429_WAIT = 60
@@ -420,6 +448,9 @@ for idx, kayit in enumerate(islenecekler):
     json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
         _time.sleep(GEMINI_MIN_INTERVAL)
+
+for _kayit in mevcut_dict.values():
+    _kayit["efor_kazanc_seviyesi"] = efor_kazanc_hesapla(_kayit.get("istenen_materyal"))
 
 _dup_sayisi, _dup_gruplari = tekillestir(list(mevcut_dict.values()))
 if _dup_sayisi:
