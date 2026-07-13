@@ -67,6 +67,19 @@ def basvuru_ekle(link: str):
     dosya_yaz(BASVURULAR_DOSYA, basvurular)
     return {"basari": True, "eklenen": basvurular[link]}
 
+@app.put("/basvurular/{link:path}")
+def basvuru_durum_guncelle(link: str, durum: str):
+    gecerli_durumlar = {"beklemede", "kazandi", "kaybetti"}
+    if durum not in gecerli_durumlar:
+        raise HTTPException(status_code=400, detail=f"Gecersiz durum, izin verilenler: {sorted(gecerli_durumlar)}")
+    basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+    if link not in basvurular:
+        raise HTTPException(status_code=404, detail="Basvuru bulunamadi")
+    basvurular[link]["durum"] = durum
+    dosya_yaz(BASVURULAR_DOSYA, basvurular)
+    return basvurular[link]
+
+
 @app.get("/ekip")
 def ekibi_getir():
     return dosya_oku(EKIP_DOSYA, [])
@@ -129,6 +142,16 @@ def task_guncelle(task_id: int, baslik: str = None, atanan: str = None, tur: str
             dosya_yaz(TASKLAR_DOSYA, tasklar)
             return t
     raise HTTPException(status_code=404, detail="Task bulunamadi")
+
+
+@app.delete("/tasklar/{task_id}")
+def task_sil(task_id: int):
+    tasklar = dosya_oku(TASKLAR_DOSYA, [])
+    yeni_liste = [t for t in tasklar if t["id"] != task_id]
+    if len(yeni_liste) == len(tasklar):
+        raise HTTPException(status_code=404, detail="Task bulunamadi")
+    dosya_yaz(TASKLAR_DOSYA, yeni_liste)
+    return {"basari": True, "silinen_id": task_id}
 
 
 def _github_repo_bilgisi(github_link: str):
