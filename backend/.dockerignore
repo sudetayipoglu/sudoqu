@@ -1,0 +1,12 @@
+venv/
+.env
+__pycache__/
+*.pyc
+radar_log.txt
+*.bak
+*.bak_*
+model_test_*
+model_compare_*
+*_log.txt
+quota_monitor_log.txt
+proje_dosyalari/
