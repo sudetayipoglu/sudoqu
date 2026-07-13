@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ArrowUpRight, CalendarDays, Check, Loader2, Search, Sparkles, X } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
@@ -71,6 +71,11 @@ export function OpportunitiesTab({
   const [seciliTurler, setSeciliTurler] = useState<Set<string>>(new Set())
   const [seciliFormatlar, setSeciliFormatlar] = useState<Set<FormatTuru>>(new Set())
   const [seciliMaliyetler, setSeciliMaliyetler] = useState<Set<MaliyetDurumu>>(new Set())
+  const [gosterilenSayisi, setGosterilenSayisi] = useState(60)
+
+  useEffect(() => {
+    setGosterilenSayisi(60)
+  }, [query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
 
   const visibleItems = useMemo(
     () => items.filter((o) => !o.duplicateOf && !suresiGecmisMi(o.sonBasvuruTarihi)),
@@ -124,6 +129,8 @@ export function OpportunitiesTab({
 
     return siralaFirsatlar(sonuc, siralama)
   }, [visibleItems, query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
+
+  const gosterilecekler = useMemo(() => filtered.slice(0, gosterilenSayisi), [filtered, gosterilenSayisi])
 
   async function handleApply(o: Opportunity) {
     if (o.basvuruldu || pending) return
@@ -219,7 +226,7 @@ export function OpportunitiesTab({
         <EmptyState text={query ? "Aramanla eşleşen fırsat yok." : "Henüz fırsat bulunamadı."} />
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((o, i) => (
+          {gosterilecekler.map((o, i) => (
             <Reveal as="li" key={o.id} delay={Math.min(i * 60, 360)}>
               <article
               className="glow-hover group flex h-full flex-col rounded-2xl border border-border bg-card/70 p-5 backdrop-blur cursor-pointer"
@@ -298,6 +305,18 @@ export function OpportunitiesTab({
             </Reveal>
           ))}
         </ul>
+      )}
+
+      {filtered.length > gosterilenSayisi && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => setGosterilenSayisi((n) => n + 60)}
+            className="rounded-xl border border-border bg-card/60 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Daha fazla goster ({filtered.length - gosterilenSayisi} kaldi)
+          </button>
+        </div>
       )}
 
       {selected && (
