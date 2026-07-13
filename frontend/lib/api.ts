@@ -159,3 +159,103 @@ export async function completeTask(id: string): Promise<void> {
   })
   if (!res.ok) throw new Error(`Görev tamamlanamadı (${res.status})`)
 }
+
+/* ---------- Projeler (V1.4) ---------- */
+export interface ProjeNot {
+  tarih: string
+  metin: string
+}
+
+export interface ProjeDosya {
+  ad: string
+  tarih: string
+  boyut: number
+}
+
+export interface ProjeGithubBilgi {
+  aciklama: string | null
+  yildizSayisi: number | null
+  sonCommit: { mesaj: string; tarih: string | null; yazar: string | null } | null
+  dil: string | null
+  hata?: string
+}
+
+export interface Proje {
+  id: string
+  ad: string
+  aciklama: string
+  githubLink: string | null
+  durum: string
+  notlar: ProjeNot[]
+  dosyalar: ProjeDosya[]
+  olusturmaTarihi: string
+  githubBilgi: ProjeGithubBilgi | null
+}
+
+export async function getProjeler(): Promise<Proje[]> {
+  const rows = await getJson("/projeler")
+  return rows.map((r: Record<string, unknown>) => ({
+    id: String(r.id),
+    ad: String(r.ad ?? ""),
+    aciklama: String(r.aciklama ?? ""),
+    githubLink: (r.github_link as string) ?? null,
+    durum: String(r.durum ?? "aktif"),
+    notlar: (r.notlar as ProjeNot[]) ?? [],
+    dosyalar: (r.dosyalar as ProjeDosya[]) ?? [],
+    olusturmaTarihi: String(r.olusturma_tarihi ?? ""),
+    githubBilgi: r.github_bilgi
+      ? {
+          aciklama: (r.github_bilgi as Record<string, unknown>).aciklama as string | null,
+          yildizSayisi: (r.github_bilgi as Record<string, unknown>).yildiz_sayisi as number | null,
+          sonCommit: (r.github_bilgi as Record<string, unknown>).son_commit as ProjeGithubBilgi["sonCommit"],
+          dil: (r.github_bilgi as Record<string, unknown>).dil as string | null,
+          hata: (r.github_bilgi as Record<string, unknown>).hata as string | undefined,
+        }
+      : null,
+  }))
+}
+
+export async function createProje(ad: string, aciklama: string, githubLink: string): Promise<Proje> {
+  const params = new URLSearchParams({ ad, aciklama, github_link: githubLink })
+  const res = await fetch(`${API_BASE}/projeler?${params.toString()}`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Proje eklenemedi (${res.status})`)
+  return res.json()
+}
+
+export async function updateProjeDurum(id: string, durum: string): Promise<void> {
+  const params = new URLSearchParams({ durum })
+  const res = await fetch(`${API_BASE}/projeler/${encodeURIComponent(id)}?${params.toString()}`, {
+    method: "PUT",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Proje guncellenemedi (${res.status})`)
+}
+
+export async function addProjeNot(id: string, metin: string): Promise<void> {
+  const params = new URLSearchParams({ metin })
+  const res = await fetch(`${API_BASE}/projeler/${encodeURIComponent(id)}/not?${params.toString()}`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Not eklenemedi (${res.status})`)
+}
+
+export async function uploadProjeDosya(id: string, file: File): Promise<void> {
+  const formData = new FormData()
+  formData.append("file", file)
+  const res = await fetch(`${API_BASE}/projeler/${encodeURIComponent(id)}/dosya`, {
+    method: "POST",
+    body: formData,
+  })
+  if (!res.ok) {
+    const hata = await res.json().catch(() => ({ detail: "Dosya yuklenemedi" }))
+    throw new Error(hata.detail || `Dosya yuklenemedi (${res.status})`)
+  }
+}
+
+export function projeDosyaUrl(id: string, dosyaAdi: string): string {
+  return `${API_BASE}/projeler/${encodeURIComponent(id)}/dosya/${encodeURIComponent(dosyaAdi)}`
+}

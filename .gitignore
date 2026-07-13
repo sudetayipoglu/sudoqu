@@ -8,3 +8,5 @@ backend/firsatlar.json
 backend/radar_log.txt
 backend/pilot_raw_results.json
 backend/pilot_run_log.txt
+backend/projeler.json
+backend/proje_dosyalari/

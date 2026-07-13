@@ -2,27 +2,31 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { AlertTriangle, CalendarCheck, FileText, Loader2, RefreshCw, Sparkles, Target } from "lucide-react"
+import { AlertTriangle, CalendarCheck, FileText, FolderGit2, Loader2, RefreshCw, Sparkles, Target } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { OpportunitiesTab } from "@/components/opportunities-tab"
 import { TasksTab } from "@/components/tasks-tab"
 import { ApplicationsTab } from "@/components/applications-tab"
+import { ProjelerTab } from "@/components/projeler-tab"
 import {
   getApplications,
   getOpportunities,
   getTasks,
+  getProjeler,
   type Application,
   type Opportunity,
   type Task,
+  type Proje,
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-type TabKey = "firsatlar" | "tasklar" | "basvurular"
+type TabKey = "firsatlar" | "tasklar" | "basvurular" | "projeler"
 
 const TABS: { key: TabKey; label: string; icon: typeof Target }[] = [
   { key: "firsatlar", label: "Fırsatlar", icon: Target },
   { key: "tasklar", label: "Task & Takvim", icon: CalendarCheck },
   { key: "basvurular", label: "Başvurularım", icon: FileText },
+  { key: "projeler", label: "Projelerimiz", icon: FolderGit2 },
 ]
 
 export function Dashboard() {
@@ -31,10 +35,12 @@ export function Dashboard() {
   const opportunities = useSWR<Opportunity[]>("firsatlar", getOpportunities)
   const tasks = useSWR<Task[]>("tasklar", getTasks)
   const applications = useSWR<Application[]>("basvurular", getApplications)
+  const projeler = useSWR<Proje[]>("projeler", getProjeler)
 
   const opps = opportunities.data ?? []
   const taskList = tasks.data ?? []
   const apps = applications.data ?? []
+  const projeList = projeler.data ?? []
 
   const openTasks = taskList.filter((t) => !t.tamamlandi).length
 
@@ -57,6 +63,7 @@ export function Dashboard() {
     opportunities.mutate()
     tasks.mutate()
     applications.mutate()
+    projeler.mutate()
   }
 
   const anyLoading = opportunities.isLoading || tasks.isLoading || applications.isLoading
@@ -146,6 +153,7 @@ export function Dashboard() {
           {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} />}
           {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} />}
           {tab === "basvurular" && <ApplicationsTab items={apps} />}
+        {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}
         </section>
       )}
     </div>
