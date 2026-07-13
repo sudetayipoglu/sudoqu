@@ -8,6 +8,20 @@ export interface Opportunity {
   bulunmaTarihi: string
   basvuruldu: boolean
   raw: Record<string, unknown>
+  organizator: string | null
+  konuKategori: string | null
+  sonBasvuruTarihi: string | null
+  onemliTarihler: string | null
+  basvuruAsamalari: string | null
+  yerMekan: string | null
+  konaklamaYolDestegi: string | null
+  odulMiktariTuru: string | null
+  katilimSartlari: string | null
+  takimBuyukluguLimiti: string | null
+  basvuruMaliyeti: string | null
+  istenenMateryal: string | null
+  sponsorKurumlar: string | null
+  duplicateOf: string | null
 }
 
 export interface Task {
@@ -50,6 +64,17 @@ function pickBool(obj: AnyRecord, keys: string[]): boolean {
   return false
 }
 
+function pickNullable(obj: AnyRecord, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj[k]
+    if (v === undefined || v === null) continue
+    if (typeof v === "boolean") return v ? "Evet" : "Hayır"
+    const s = String(v).trim()
+    if (s !== "" && s.toLowerCase() !== "null") return s
+  }
+  return null
+}
+
 async function getJson(path: string): Promise<AnyRecord[]> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Accept: "application/json" },
@@ -74,6 +99,20 @@ export async function getOpportunities(): Promise<Opportunity[]> {
     link: pick(r, ["link", "url", "adres"]),
     bulunmaTarihi: pick(r, ["bulunma_tarihi", "bulunmaTarihi", "tarih", "date", "created_at", "createdAt"]),
     basvuruldu: pickBool(r, ["basvuruldu", "başvuruldu", "applied", "isApplied"]),
+    organizator: pickNullable(r, ["organizator"]),
+    konuKategori: pickNullable(r, ["konu_kategori"]),
+    sonBasvuruTarihi: pickNullable(r, ["son_basvuru_tarihi"]),
+    onemliTarihler: pickNullable(r, ["onemli_tarihler"]),
+    basvuruAsamalari: pickNullable(r, ["basvuru_asamalari"]),
+    yerMekan: pickNullable(r, ["yer_mekan"]),
+    konaklamaYolDestegi: pickNullable(r, ["konaklama_yol_destegi"]),
+    odulMiktariTuru: pickNullable(r, ["odul_miktari_turu"]),
+    katilimSartlari: pickNullable(r, ["katilim_sartlari"]),
+    takimBuyukluguLimiti: pickNullable(r, ["takim_buyuklugu_limiti"]),
+    basvuruMaliyeti: pickNullable(r, ["basvuru_maliyeti"]),
+    istenenMateryal: pickNullable(r, ["istenen_materyal"]),
+    sponsorKurumlar: pickNullable(r, ["sponsor_kurumlar"]),
+    duplicateOf: pickNullable(r, ["duplicate_of"]),
     raw: r,
   }))
 }

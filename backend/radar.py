@@ -39,13 +39,34 @@ def _normalize_organizator(s):
     return re.sub(r"\s+", " ", s.strip().lower())
 
 
+_TR_AYLAR = {
+    "ocak": 1, "subat": 2, "şubat": 2, "mart": 3, "nisan": 4,
+    "mayis": 5, "mayıs": 5, "haziran": 6, "temmuz": 7, "agustos": 8,
+    "ağustos": 8, "eylul": 9, "eylül": 9, "ekim": 10,
+    "kasim": 11, "kasım": 11, "aralik": 12, "aralık": 12,
+}
+
+
 def _tarih_parse(s):
     if not s:
         return None
+    s = s.strip()
     try:
-        return _datetime.strptime(s.strip(), "%Y-%m-%d")
+        return _datetime.strptime(s, "%Y-%m-%d")
     except Exception:
-        return None
+        pass
+    parcalar = s.lower().split()
+    if len(parcalar) == 3:
+        gun_s, ay_s, yil_s = parcalar
+        ay = _TR_AYLAR.get(ay_s)
+        if ay:
+            try:
+                gun = int(gun_s)
+                yil = int(yil_s)
+                return _datetime(yil, ay, gun)
+            except Exception:
+                return None
+    return None
 
 
 def _doluluk(r):

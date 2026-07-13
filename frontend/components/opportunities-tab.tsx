@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ArrowUpRight, CalendarDays, Check, Loader2, Search, Sparkles } from "lucide-react"
+import { ArrowUpRight, CalendarDays, Check, Loader2, Search, Sparkles, X } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
 import { markApplied, type Opportunity } from "@/lib/api"
@@ -14,6 +14,37 @@ function formatDate(value: string) {
   return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
+type DetailFieldKey =
+  | "organizator"
+  | "konuKategori"
+  | "sonBasvuruTarihi"
+  | "onemliTarihler"
+  | "basvuruAsamalari"
+  | "yerMekan"
+  | "konaklamaYolDestegi"
+  | "odulMiktariTuru"
+  | "katilimSartlari"
+  | "takimBuyukluguLimiti"
+  | "basvuruMaliyeti"
+  | "istenenMateryal"
+  | "sponsorKurumlar"
+
+const DETAIL_FIELDS: { key: DetailFieldKey; label: string }[] = [
+  { key: "organizator", label: "Organizatör" },
+  { key: "konuKategori", label: "Konu / Kategori" },
+  { key: "sonBasvuruTarihi", label: "Son Başvuru Tarihi" },
+  { key: "onemliTarihler", label: "Önemli Tarihler" },
+  { key: "basvuruAsamalari", label: "Başvuru Aşamaları" },
+  { key: "yerMekan", label: "Yer / Mekan" },
+  { key: "konaklamaYolDestegi", label: "Konaklama / Yol Desteği" },
+  { key: "odulMiktariTuru", label: "Ödül Miktarı / Türü" },
+  { key: "katilimSartlari", label: "Katılım Şartları" },
+  { key: "takimBuyukluguLimiti", label: "Takım Büyüklüğü Limiti" },
+  { key: "basvuruMaliyeti", label: "Başvuru Maliyeti" },
+  { key: "istenenMateryal", label: "İstenen Materyal" },
+  { key: "sponsorKurumlar", label: "Sponsor Kurumlar" },
+]
+
 export function OpportunitiesTab({
   items,
   onApplied,
@@ -23,14 +54,18 @@ export function OpportunitiesTab({
 }) {
   const [query, setQuery] = useState("")
   const [pending, setPending] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Opportunity | null>(null)
+  const [sudolaClicked, setSudolaClicked] = useState(false)
+
+  const visibleItems = useMemo(() => items.filter((o) => !o.duplicateOf), [items])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return items
-    return items.filter(
+    if (!q) return visibleItems
+    return visibleItems.filter(
       (o) => o.baslik.toLowerCase().includes(q) || o.link.toLowerCase().includes(q),
     )
-  }, [items, query])
+  }, [visibleItems, query])
 
   async function handleApply(o: Opportunity) {
     if (o.basvuruldu || pending) return
@@ -64,7 +99,13 @@ export function OpportunitiesTab({
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((o, i) => (
             <Reveal as="li" key={o.id} delay={Math.min(i * 60, 360)}>
-              <article className="glow-hover group flex h-full flex-col rounded-2xl border border-border bg-card/70 p-5 backdrop-blur">
+              <article
+              className="glow-hover group flex h-full flex-col rounded-2xl border border-border bg-card/70 p-5 backdrop-blur cursor-pointer"
+              onClick={() => {
+                setSelected(o)
+                setSudolaClicked(false)
+              }}
+            >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
                     <Sparkles className="h-4 w-4" />
@@ -90,6 +131,7 @@ export function OpportunitiesTab({
                     href={o.link}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     className="mt-3 inline-flex items-center gap-1 truncate text-sm text-cyan transition-colors hover:text-primary"
                   >
                     <span className="truncate">{o.link.replace(/^https?:\/\//, "")}</span>
@@ -99,7 +141,10 @@ export function OpportunitiesTab({
 
                 <button
                   type="button"
-                  onClick={() => handleApply(o)}
+                  onClick={(e) => {
+                  e.stopPropagation()
+                  handleApply(o)
+                }}
                   disabled={o.basvuruldu || pending === o.id}
                   className={cn(
                     "mt-auto inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
@@ -124,6 +169,65 @@ export function OpportunitiesTab({
             </Reveal>
           ))}
         </ul>
+      )}
+
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 className="text-pretty text-lg font-semibold leading-snug text-foreground">{selected.baslik}</h3>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label="Kapat"
+                className="shrink-0 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              Bulunma: {formatDate(selected.bulunmaTarihi)}
+            </div>
+
+            {selected.link && (
+              <a
+                href={selected.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 inline-flex items-center gap-1 truncate text-sm text-cyan transition-colors hover:text-primary"
+              >
+                <span className="truncate">{selected.link.replace(/^https?:\/\//, "")}</span>
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+              </a>
+            )}
+
+            <dl className="space-y-3 text-sm">
+              {DETAIL_FIELDS.map(({ key, label }) => (
+                <div key={key} className="flex flex-col gap-0.5 border-b border-border/60 pb-2 last:border-none">
+                  <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+                  <dd className="text-foreground">{selected[key] ?? "Bilgi yok"}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <button
+              type="button"
+              onClick={() => setSudolaClicked(true)}
+              className="mt-5 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 glow-primary"
+            >
+              sudola
+            </button>
+            {sudolaClicked && <p className="mt-2 text-center text-xs text-muted-foreground">Yakında</p>}
+          </div>
+        </div>
       )}
     </div>
   )
