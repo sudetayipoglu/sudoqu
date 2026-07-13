@@ -407,7 +407,7 @@ def sudola_soru(link: str, soru: str):
     arastirma = _sudola_arastirma_yap(firsat)
 
     prompt = (
-        'Sen "sudola" adinda bir firsat asistanisin. Asagida bir yarisma/etkinlik firsatiyla ilgili '
+        'Sen "sudo" adinda bir firsat asistanisin. Asagida bir yarisma/etkinlik firsatiyla ilgili '
         'elimizdeki bilgiler ve internet arastirmasindan gecmis kazananlar hakkinda bulunan bilgiler var. '
         'Sadece bu bilgilere dayanarak kullanicinin sorusunu Turkce, net ve kisa cevapla. Eger cevap '
         'bu bilgilerde yoksa, uydurma - "Bu konuda elimde bilgi yok" gibi durustce belirt.\n\n'
@@ -440,7 +440,7 @@ def sudola_oneri(link: str):
     arastirma = _sudola_arastirma_yap(firsat)
 
     prompt = (
-        'Sen "sudola" adinda bir firsat degerlendirme asistanisin. Asagidaki bilgilere dayanarak '
+        'Sen "sudo" adinda bir firsat degerlendirme asistanisin. Asagidaki bilgilere dayanarak '
         'bir ogrenci/takimin bu firsata basvurup basvurmamasi konusunda 0-100 arasi bir uygunluk skoru '
         've kisa bir aciklama uret. Skor, firsatin somut nitelikleriyle (odul, gereksinimler, gecmis '
         'kazananlarin basvuru profili gibi) ilgili olmalidir. ORGANIZATORUN siyasi veya sosyal '

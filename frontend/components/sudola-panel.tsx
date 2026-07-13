@@ -31,7 +31,7 @@ export function SudolaPanel({ link }: { link: string }) {
       const cevap = await sudolaSoru(link, q)
       setMesajlar((m) => [...m, { rol: "sudola", metin: cevap }])
     } catch (e) {
-      setHata(e instanceof Error ? e.message : "sudola su an cevap veremedi")
+      setHata(e instanceof Error ? e.message : "sudo su an cevap veremedi")
     } finally {
       setGonderiliyor(false)
     }
@@ -53,13 +53,12 @@ export function SudolaPanel({ link }: { link: string }) {
   return (
     <div className="mt-4 space-y-3 rounded-xl border border-border bg-card/40 p-3">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5" /> sudola ile sohbet et
+        <Sparkles className="h-3.5 w-3.5" /> sudo ile sohbet et
       </div>
 
       {mesajlar.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Bu firsatla ilgili merak ettigini sor - sudola, firsatin bilgilerine ve gecmis kazananlar
-          arastirmasina dayanarak cevaplar.
+          Bu firsatla ilgili merak ettigini sor - sudo, firsatin bilgilerine, organizator profiline, agirlikli yatirim yaptigi sektore ve gecmis kazananlar arastirmasina dayanarak cevaplar.
         </p>
       )}
 
@@ -79,7 +78,7 @@ export function SudolaPanel({ link }: { link: string }) {
         ))}
         {gonderiliyor && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> sudola dusunuyor...
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> sudo dusunuyor...
           </div>
         )}
       </div>
@@ -93,7 +92,7 @@ export function SudolaPanel({ link }: { link: string }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") gonder()
           }}
-          placeholder="Sorunu yaz..."
+          placeholder="Sudolayabildiklerimizden misiniz sudolayamadıklarımızdan mısınız?"
           maxLength={1000}
           className="flex-1 rounded-lg border border-border bg-card/60 px-3 py-2 text-xs text-foreground outline-none focus:border-primary/50"
         />
