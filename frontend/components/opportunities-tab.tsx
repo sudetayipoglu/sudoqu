@@ -6,6 +6,17 @@ import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
 import { markApplied, type Opportunity } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import {
+  formatTuruHesapla,
+  FORMAT_ETIKET,
+  maliyetDurumuHesapla,
+  MALIYET_ETIKET,
+  suresiGecmisMi,
+  siralaFirsatlar,
+  type SiralamaTuru,
+  type FormatTuru,
+  type MaliyetDurumu,
+} from "@/lib/opportunity-utils"
 
 function formatDate(value: string) {
   if (!value) return "—"
@@ -56,16 +67,63 @@ export function OpportunitiesTab({
   const [pending, setPending] = useState<string | null>(null)
   const [selected, setSelected] = useState<Opportunity | null>(null)
   const [sudolaClicked, setSudolaClicked] = useState(false)
+  const [siralama, setSiralama] = useState<SiralamaTuru>("son_basvuru")
+  const [seciliTurler, setSeciliTurler] = useState<Set<string>>(new Set())
+  const [seciliFormatlar, setSeciliFormatlar] = useState<Set<FormatTuru>>(new Set())
+  const [seciliMaliyetler, setSeciliMaliyetler] = useState<Set<MaliyetDurumu>>(new Set())
 
-  const visibleItems = useMemo(() => items.filter((o) => !o.duplicateOf), [items])
+  const visibleItems = useMemo(
+    () => items.filter((o) => !o.duplicateOf && !suresiGecmisMi(o.sonBasvuruTarihi)),
+    [items],
+  )
+
+  const turSecenekleri = useMemo(() => {
+    const s = new Set<string>()
+    visibleItems.forEach((o) => {
+      if (o.konuKategori) s.add(o.konuKategori)
+    })
+    return Array.from(s).sort((a, b) => a.localeCompare(b, "tr"))
+  }, [visibleItems])
+
+  function toggleTur(value: string) {
+    const next = new Set(seciliTurler)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    setSeciliTurler(next)
+  }
+
+  function toggleFormat(value: FormatTuru) {
+    const next = new Set(seciliFormatlar)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    setSeciliFormatlar(next)
+  }
+
+  function toggleMaliyet(value: MaliyetDurumu) {
+    const next = new Set(seciliMaliyetler)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    setSeciliMaliyetler(next)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return visibleItems
-    return visibleItems.filter(
-      (o) => o.baslik.toLowerCase().includes(q) || o.link.toLowerCase().includes(q),
-    )
-  }, [visibleItems, query])
+    let sonuc = q
+      ? visibleItems.filter((o) => o.baslik.toLowerCase().includes(q) || o.link.toLowerCase().includes(q))
+      : visibleItems
+
+    if (seciliTurler.size > 0) {
+      sonuc = sonuc.filter((o) => o.konuKategori && seciliTurler.has(o.konuKategori))
+    }
+    if (seciliFormatlar.size > 0) {
+      sonuc = sonuc.filter((o) => seciliFormatlar.has(formatTuruHesapla(o.yerMekan)))
+    }
+    if (seciliMaliyetler.size > 0) {
+      sonuc = sonuc.filter((o) => seciliMaliyetler.has(maliyetDurumuHesapla(o.basvuruMaliyeti)))
+    }
+
+    return siralaFirsatlar(sonuc, siralama)
+  }, [visibleItems, query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
 
   async function handleApply(o: Opportunity) {
     if (o.basvuruldu || pending) return
@@ -93,6 +151,70 @@ export function OpportunitiesTab({
         />
       </Reveal>
 
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <select
+          value={siralama}
+          onChange={(e) => setSiralama(e.target.value as SiralamaTuru)}
+          className="rounded-lg border border-border bg-card/60 px-3 py-1.5 text-xs text-foreground outline-none"
+        >
+          <option value="son_basvuru">Son basvuruya gore (yaklasan uste)</option>
+          <option value="alfabetik">Alfabetik</option>
+          <option value="region">Bolgeye gore</option>
+        </select>
+
+        {turSecenekleri.map((tur) => (
+          <button
+            key={tur}
+            type="button"
+            onClick={() => toggleTur(tur)}
+            className={cn(
+              "rounded-full border px-3 py-1 transition-colors",
+              seciliTurler.has(tur)
+                ? "border-primary/50 bg-primary/15 text-primary"
+                : "border-border bg-card/60 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tur}
+          </button>
+        ))}
+
+        {(Object.keys(FORMAT_ETIKET) as FormatTuru[])
+          .filter((f) => f !== "belirtilmemis")
+          .map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => toggleFormat(f)}
+              className={cn(
+                "rounded-full border px-3 py-1 transition-colors",
+                seciliFormatlar.has(f)
+                  ? "border-cyan/50 bg-cyan/15 text-cyan"
+                  : "border-border bg-card/60 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {FORMAT_ETIKET[f]}
+            </button>
+          ))}
+
+        {(Object.keys(MALIYET_ETIKET) as MaliyetDurumu[])
+          .filter((m) => m !== "belirtilmemis")
+          .map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => toggleMaliyet(m)}
+              className={cn(
+                "rounded-full border px-3 py-1 transition-colors",
+                seciliMaliyetler.has(m)
+                  ? "border-success/50 bg-success/15 text-success"
+                  : "border-border bg-card/60 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {MALIYET_ETIKET[m]}
+            </button>
+          ))}
+      </div>
+
       {filtered.length === 0 ? (
         <EmptyState text={query ? "Aramanla eşleşen fırsat yok." : "Henüz fırsat bulunamadı."} />
       ) : (
@@ -115,6 +237,13 @@ export function OpportunitiesTab({
                       <Check className="h-3 w-3" /> Başvuruldu
                     </StatusBadge>
                   )}
+          {o.eforKazancSeviyesi && (
+            <StatusBadge
+              tone={o.eforKazancSeviyesi === "yuksek" ? "warning" : o.eforKazancSeviyesi === "orta" ? "cyan" : "success"}
+            >
+              Efor: {o.eforKazancSeviyesi === "yuksek" ? "Yüksek" : o.eforKazancSeviyesi === "orta" ? "Orta" : "Düşük"}
+            </StatusBadge>
+          )}
                 </div>
 
                 <h3 className="text-pretty text-base font-semibold leading-snug text-foreground">

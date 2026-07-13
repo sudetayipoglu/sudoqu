@@ -22,6 +22,7 @@ export interface Opportunity {
   istenenMateryal: string | null
   sponsorKurumlar: string | null
   duplicateOf: string | null
+  eforKazancSeviyesi: string | null
 }
 
 export interface Task {
@@ -113,6 +114,7 @@ export async function getOpportunities(): Promise<Opportunity[]> {
     istenenMateryal: pickNullable(r, ["istenen_materyal"]),
     sponsorKurumlar: pickNullable(r, ["sponsor_kurumlar"]),
     duplicateOf: pickNullable(r, ["duplicate_of"]),
+    eforKazancSeviyesi: pickNullable(r, ["efor_kazanc_seviyesi"]),
     raw: r,
   }))
 }
