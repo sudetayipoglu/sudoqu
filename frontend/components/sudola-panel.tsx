@@ -31,7 +31,7 @@ export function SudolaPanel({ link }: { link: string }) {
       const cevap = await sudolaSoru(link, q)
       setMesajlar((m) => [...m, { rol: "sudola", metin: cevap }])
     } catch (e) {
-      setHata(e instanceof Error ? e.message : "sudo su an cevap veremedi")
+      setHata(e instanceof Error ? e.message : "Sudo su an cevap veremedi")
     } finally {
       setGonderiliyor(false)
     }
@@ -53,12 +53,12 @@ export function SudolaPanel({ link }: { link: string }) {
   return (
     <div className="mt-4 space-y-3 rounded-xl border border-border bg-card/40 p-3">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5" /> sudo ile sohbet et
+        <Sparkles className="h-3.5 w-3.5" /> Sudo ile sohbet et
       </div>
 
       {mesajlar.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          Bu firsatla ilgili merak ettigini sor - sudo, firsatin bilgilerine, organizator profiline, agirlikli yatirim yaptigi sektore ve gecmis kazananlar arastirmasina dayanarak cevaplar.
+          Bu firsatla ilgili merak ettigini sor - Sudo, firsatin bilgilerine, organizator profiline, agirlikli yatirim yaptigi sektore ve gecmis kazananlar arastirmasina dayanarak cevaplar.
         </p>
       )}
 
@@ -78,7 +78,7 @@ export function SudolaPanel({ link }: { link: string }) {
         ))}
         {gonderiliyor && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> sudo dusunuyor...
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sudo dusunuyor...
           </div>
         )}
       </div>

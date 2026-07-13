@@ -372,7 +372,7 @@ export function OpportunitiesTab({
               onClick={() => setSudolaClicked(true)}
               className="mt-5 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 glow-primary"
             >
-              sudola
+              Sudola
             </button>
             {sudolaClicked && selected && <SudolaPanel link={selected.link} />}
           </div>
