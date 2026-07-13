@@ -277,3 +277,173 @@ def proje_dosya_indir(proje_id: str, dosya_adi: str):
     if not os.path.exists(yol):
         raise HTTPException(status_code=404, detail="Dosya bulunamadi")
     return FileResponse(yol, filename=guvenli_ad)
+
+
+# --- V1.5: sudola chatbot (Tavily arastirma + Gemini soru-cevap / oneri) ---
+from pydantic import BaseModel
+from dotenv import load_dotenv
+load_dotenv()
+from secret_helper import get_secret_or_env
+from tavily import TavilyClient
+from google import genai
+from google.genai import types
+
+SUDOLA_TAVILY_API_KEY = get_secret_or_env("tavily-api-key", "TAVILY_API_KEY")
+SUDOLA_GEMINI_API_KEY = get_secret_or_env("gemini-api-key", "GEMINI_API_KEY")
+sudola_tavily_client = TavilyClient(api_key=SUDOLA_TAVILY_API_KEY) if SUDOLA_TAVILY_API_KEY else None
+sudola_gemini_client = genai.Client(api_key=SUDOLA_GEMINI_API_KEY) if SUDOLA_GEMINI_API_KEY else None
+SUDOLA_GEMINI_MODEL = "gemini-flash-lite-latest"
+
+_sudola_arastirma_cache = {}
+_SUDOLA_ARASTIRMA_TTL = 3600
+
+
+class SudolaOneriSonuc(BaseModel):
+    skor: int
+    aciklama: str
+    guclu_yonler: list[str]
+    riskler: list[str]
+
+
+def _firsat_bul(link: str):
+    firsatlar = dosya_oku(FIRSATLAR_DOSYA, [])
+    return next((f for f in firsatlar if f.get("link") == link), None)
+
+
+_SUDOLA_ALAN_ETIKETLERI = {
+    "organizator": "Organizator",
+    "konu_kategori": "Konu/Kategori",
+    "son_basvuru_tarihi": "Son Basvuru Tarihi",
+    "onemli_tarihler": "Onemli Tarihler",
+    "basvuru_asamalari": "Basvuru Asamalari",
+    "yer_mekan": "Yer/Mekan",
+    "konaklama_yol_destegi": "Konaklama/Yol Destegi",
+    "odul_miktari_turu": "Odul Miktari/Turu",
+    "katilim_sartlari": "Katilim Sartlari",
+    "takim_buyuklugu_limiti": "Takim Buyuklugu Limiti",
+    "basvuru_maliyeti": "Basvuru Maliyeti",
+    "istenen_materyal": "Istenen Materyal",
+    "sponsor_kurumlar": "Sponsor Kurumlar",
+}
+
+
+def _firsat_baglam_metni(firsat: dict) -> str:
+    satirlar = [f"Baslik: {firsat.get('baslik', '')}", f"Link: {firsat.get('link', '')}"]
+    for alan, etiket in _SUDOLA_ALAN_ETIKETLERI.items():
+        deger = firsat.get(alan)
+        satirlar.append(f"{etiket}: {deger if deger not in (None, '') else 'Bilgi yok'}")
+    return "\n".join(satirlar)
+
+
+def _sudola_arastirma_yap(firsat: dict) -> str:
+    link = firsat.get("link", "")
+    now = time.time()
+    if link in _sudola_arastirma_cache:
+        deger, ts = _sudola_arastirma_cache[link]
+        if now - ts < _SUDOLA_ARASTIRMA_TTL:
+            return deger
+
+    if sudola_tavily_client is None:
+        sonuc = "(Tavily API anahtari yapilandirilmamis - arastirma yapilamadi)"
+        _sudola_arastirma_cache[link] = (sonuc, now)
+        return sonuc
+
+    organizator = firsat.get("organizator") or ""
+    baslik = firsat.get("baslik") or ""
+    sorgu = f"{organizator} {baslik} gecmis yillar kazananlari kazanma nedenleri".strip()
+
+    try:
+        arama = sudola_tavily_client.search(query=sorgu, max_results=5, search_depth="basic")
+        parcalar = []
+        for r in arama.get("results", []):
+            baslik_r = r.get("title", "")
+            icerik_r = (r.get("content", "") or "")[:500]
+            parcalar.append(f"- {baslik_r}: {icerik_r}")
+        sonuc = "\n".join(parcalar) if parcalar else "(Bu firsatla ilgili arama sonucu bulunamadi)"
+    except Exception as e:
+        sonuc = f"(Tavily arama hatasi: {type(e).__name__})"
+
+    _sudola_arastirma_cache[link] = (sonuc, now)
+    return sonuc
+
+
+@app.post("/sudola/soru")
+def sudola_soru(link: str, soru: str):
+    soru = (soru or "").strip()
+    if not soru:
+        raise HTTPException(status_code=400, detail="Soru bos olamaz")
+    if len(soru) > 1000:
+        raise HTTPException(status_code=400, detail="Soru 1000 karakteri asamaz")
+
+    firsat = _firsat_bul(link)
+    if not firsat:
+        raise HTTPException(status_code=404, detail="Firsat bulunamadi")
+
+    if sudola_gemini_client is None:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY yapilandirilmamis")
+
+    baglam = _firsat_baglam_metni(firsat)
+    arastirma = _sudola_arastirma_yap(firsat)
+
+    prompt = (
+        'Sen "sudola" adinda bir firsat asistanisin. Asagida bir yarisma/etkinlik firsatiyla ilgili '
+        'elimizdeki bilgiler ve internet arastirmasindan gecmis kazananlar hakkinda bulunan bilgiler var. '
+        'Sadece bu bilgilere dayanarak kullanicinin sorusunu Turkce, net ve kisa cevapla. Eger cevap '
+        'bu bilgilerde yoksa, uydurma - "Bu konuda elimde bilgi yok" gibi durustce belirt.\n\n'
+        '--- FIRSAT BILGILERI ---\n' + baglam + '\n\n'
+        '--- GECMIS KAZANANLAR ARASTIRMASI (internetten) ---\n' + arastirma + '\n\n'
+        '--- KULLANICI SORUSU ---\n' + soru + '\n\nCevap:'
+    )
+
+    try:
+        response = sudola_gemini_client.models.generate_content(model=SUDOLA_GEMINI_MODEL, contents=prompt)
+        cevap = (response.text or "").strip()
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            raise HTTPException(status_code=429, detail="Gemini gunluk kota sinirina ulasildi, lutfen daha sonra tekrar deneyin")
+        raise HTTPException(status_code=502, detail=f"Gemini hatasi: {type(e).__name__}")
+
+    return {"cevap": cevap, "arastirma_kullanildi": sudola_tavily_client is not None}
+
+
+@app.get("/sudola/oneri/{link:path}")
+def sudola_oneri(link: str):
+    firsat = _firsat_bul(link)
+    if not firsat:
+        raise HTTPException(status_code=404, detail="Firsat bulunamadi")
+
+    if sudola_gemini_client is None:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY yapilandirilmamis")
+
+    baglam = _firsat_baglam_metni(firsat)
+    arastirma = _sudola_arastirma_yap(firsat)
+
+    prompt = (
+        'Sen "sudola" adinda bir firsat degerlendirme asistanisin. Asagidaki bilgilere dayanarak '
+        'bir ogrenci/takimin bu firsata basvurup basvurmamasi konusunda 0-100 arasi bir uygunluk skoru '
+        've kisa bir aciklama uret. Skor, firsatin somut nitelikleriyle (odul, gereksinimler, gecmis '
+        'kazananlarin basvuru profili gibi) ilgili olmalidir. ORGANIZATORUN siyasi veya sosyal '
+        'egilimini ASLA degerlendirmeye katma - sadece firsatin objektif nitelikleri ve gecmis kazanma '
+        'orunekleri onemli.\n\n'
+        '--- FIRSAT BILGILERI ---\n' + baglam + '\n\n'
+        '--- GECMIS KAZANANLAR ARASTIRMASI (internetten) ---\n' + arastirma
+    )
+
+    try:
+        response = sudola_gemini_client.models.generate_content(
+            model=SUDOLA_GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=SudolaOneriSonuc,
+            ),
+        )
+        if not response.parsed:
+            raise ValueError("bos parsed")
+        return response.parsed.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+            raise HTTPException(status_code=429, detail="Gemini gunluk kota sinirina ulasildi, lutfen daha sonra tekrar deneyin")
+        raise HTTPException(status_code=502, detail=f"Gemini hatasi: {type(e).__name__}")

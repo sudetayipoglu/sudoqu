@@ -259,3 +259,41 @@ export async function uploadProjeDosya(id: string, file: File): Promise<void> {
 export function projeDosyaUrl(id: string, dosyaAdi: string): string {
   return `${API_BASE}/projeler/${encodeURIComponent(id)}/dosya/${encodeURIComponent(dosyaAdi)}`
 }
+
+export interface SudolaOneri {
+  skor: number
+  aciklama: string
+  gucluYonler: string[]
+  riskler: string[]
+}
+
+export async function sudolaSoru(link: string, soru: string): Promise<string> {
+  const params = new URLSearchParams({ link, soru })
+  const res = await fetch(`${API_BASE}/sudola/soru?${params.toString()}`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) {
+    const hata = await res.json().catch(() => null)
+    throw new Error(hata?.detail ?? `sudola soru basarisiz (${res.status})`)
+  }
+  const data = await res.json()
+  return String(data.cevap ?? "")
+}
+
+export async function sudolaOneri(link: string): Promise<SudolaOneri> {
+  const res = await fetch(`${API_BASE}/sudola/oneri/${encodeURIComponent(link)}`, {
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) {
+    const hata = await res.json().catch(() => null)
+    throw new Error(hata?.detail ?? `sudola oneri basarisiz (${res.status})`)
+  }
+  const data = await res.json()
+  return {
+    skor: Number(data.skor ?? 0),
+    aciklama: String(data.aciklama ?? ""),
+    gucluYonler: Array.isArray(data.guclu_yonler) ? data.guclu_yonler.map(String) : [],
+    riskler: Array.isArray(data.riskler) ? data.riskler.map(String) : [],
+  }
+}

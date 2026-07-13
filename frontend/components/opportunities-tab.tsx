@@ -6,6 +6,7 @@ import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
 import { markApplied, type Opportunity } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { SudolaPanel } from "@/components/sudola-panel"
 import {
   formatTuruHesapla,
   FORMAT_ETIKET,
@@ -373,7 +374,7 @@ export function OpportunitiesTab({
             >
               sudola
             </button>
-            {sudolaClicked && <p className="mt-2 text-center text-xs text-muted-foreground">Yakında</p>}
+            {sudolaClicked && selected && <SudolaPanel link={selected.link} />}
           </div>
         </div>
       )}
