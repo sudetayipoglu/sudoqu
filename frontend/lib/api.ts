@@ -183,6 +183,23 @@ export async function updateTask(id: string, fields: { baslik?: string; atanan?:
   if (!res.ok) throw new Error(`Görev güncellenemedi (${res.status})`)
 }
 
+export async function updateApplicationStatus(link: string, durum: string): Promise<void> {
+  const params = new URLSearchParams({ durum })
+  const res = await fetch(`${API_BASE}/basvurular/${encodeURIComponent(link)}?${params.toString()}`, {
+    method: "PUT",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Basvuru durumu guncellenemedi (${res.status})`)
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/tasklar/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Gorev silinemedi (${res.status})`)
+}
+
 export async function getEkip(): Promise<string[]> {
   const res = await fetch(`${API_BASE}/ekip`, { headers: { Accept: "application/json" }, cache: "no-store" })
   if (!res.ok) throw new Error(`Ekip getirilemedi (${res.status})`)

@@ -32,6 +32,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Target }[] = [
 
 export function Dashboard() {
   const [tab, setTab] = useState<TabKey>("firsatlar")
+  const [highlightLink, setHighlightLink] = useState<string | null>(null)
 
   const opportunities = useSWR<Opportunity[]>("firsatlar", getOpportunities)
   const tasks = useSWR<Task[]>("tasklar", getTasks)
@@ -153,9 +154,9 @@ export function Dashboard() {
         <ErrorState onRetry={refreshAll} />
       ) : (
         <section>
-          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} />}
+          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} />}
           {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
-          {tab === "basvurular" && <ApplicationsTab items={apps} />}
+          {tab === "basvurular" && <ApplicationsTab items={apps} onChanged={() => applications.mutate()} onGoToOpportunity={(link) => { setTab("firsatlar"); setHighlightLink(link) }} />}
         {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}
         </section>
       )}

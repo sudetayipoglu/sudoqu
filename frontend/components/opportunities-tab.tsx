@@ -60,9 +60,13 @@ const DETAIL_FIELDS: { key: DetailFieldKey; label: string }[] = [
 export function OpportunitiesTab({
   items,
   onApplied,
+  initialLink = null,
+  onInitialLinkConsumed,
 }: {
   items: Opportunity[]
   onApplied: (id: string) => void
+  initialLink?: string | null
+  onInitialLinkConsumed?: () => void
 }) {
   const [query, setQuery] = useState("")
   const [pending, setPending] = useState<string | null>(null)
@@ -77,6 +81,15 @@ export function OpportunitiesTab({
   useEffect(() => {
     setGosterilenSayisi(60)
   }, [query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
+
+  useEffect(() => {
+    if (!initialLink) return
+    const eslesen = items.find((o) => o.link === initialLink)
+    if (eslesen) {
+      setSelected(eslesen)
+    }
+    onInitialLinkConsumed?.()
+  }, [initialLink, items])
 
   const visibleItems = useMemo(
     () => items.filter((o) => !o.duplicateOf && !suresiGecmisMi(o.sonBasvuruTarihi)),
