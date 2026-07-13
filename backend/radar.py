@@ -5,7 +5,8 @@ import json
 from datetime import datetime
 
 load_dotenv()
-api_key = os.getenv("TAVILY_API_KEY")
+from secret_helper import get_secret_or_env
+api_key = get_secret_or_env("tavily-api-key", "TAVILY_API_KEY")
 client = TavilyClient(api_key=api_key)
 
 # --- V1.3: Tavily Extract + Gemini yapisal veri cikarim pipeline'i (pilot testte dogrulandi) ---
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = get_secret_or_env("gemini-api-key", "GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 # TEKILLESTIRME (DEDUP) MANTIGI - kural bazli, LLM kullanilmaz
