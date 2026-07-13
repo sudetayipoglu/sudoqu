@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil } from "lucide-react"
+import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2 } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge, statusTone } from "@/components/status-badge"
-import { completeTask, createTask, updateTask, type Task } from "@/lib/api"
+import { completeTask, createTask, updateTask, deleteTask, type Task } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 function formatDate(value: string) {
@@ -40,6 +40,7 @@ export function TasksTab({
   onChanged: () => void
 }) {
   const [pending, setPending] = useState<string | null>(null)
+  const [siliniyor, setSiliniyor] = useState<string | null>(null)
   const [filterKisi, setFilterKisi] = useState<string>("hepsi")
 
   const [formAcik, setFormAcik] = useState(false)
@@ -66,6 +67,19 @@ export function TasksTab({
       console.log("[v0] completeTask error:", (err as Error).message)
     } finally {
       setPending(null)
+    }
+  }
+
+  async function handleSil(t: Task) {
+    if (!window.confirm(`"${t.baslik}" gorevini silmek istediginize emin misiniz?`)) return
+    setSiliniyor(t.id)
+    try {
+      await deleteTask(t.id)
+      onChanged()
+    } catch (err) {
+      console.log("[v0] deleteTask error:", (err as Error).message)
+    } finally {
+      setSiliniyor(null)
     }
   }
 
@@ -302,6 +316,15 @@ export function TasksTab({
                             aria-label="Düzenle"
                           >
                             <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSil(t)}
+                            disabled={siliniyor === t.id}
+                            className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
+                            aria-label="Sil"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                           <StatusBadge tone={t.tamamlandi ? "success" : statusTone(t.durum)}>
                             {t.tamamlandi ? "Tamamlandı" : t.durum || "Beklemede"}
