@@ -362,3 +362,44 @@ def save_basvurular(veri):
         conn.commit()
     finally:
         conn.close()
+
+
+# ============================================================
+# FAZ C1: sudola proje onerisi persist fonksiyonlari
+# ============================================================
+
+def get_firsat_id_by_link(link):
+    rows = fetch_all("SELECT id FROM firsatlar WHERE link = %s", (link,))
+    return rows[0]["id"] if rows else None
+
+
+def save_sudola_onerisi(firsat_id, onerilen_proje_id, skor, aciklama, guclu_yonler, riskler):
+    execute(
+        """
+        INSERT INTO sudola_onerileri
+            (firsat_id, onerilen_proje_id, skor, aciklama, guclu_yonler, riskler, olusturma_tarihi)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            firsat_id,
+            onerilen_proje_id,
+            skor,
+            aciklama,
+            json.dumps(guclu_yonler or [], ensure_ascii=False),
+            json.dumps(riskler or [], ensure_ascii=False),
+        ),
+    )
+
+
+def get_son_sudola_onerisi(firsat_id):
+    rows = fetch_all(
+        """
+        SELECT onerilen_proje_id, skor, aciklama, guclu_yonler, riskler, olusturma_tarihi
+        FROM sudola_onerileri
+        WHERE firsat_id = %s
+        ORDER BY olusturma_tarihi DESC, id DESC
+        LIMIT 1
+        """,
+        (firsat_id,),
+    )
+    return rows[0] if rows else None

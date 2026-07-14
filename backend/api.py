@@ -359,6 +359,7 @@ def proje_dosya_indir(proje_id: str, dosya_adi: str):
 
 # --- V1.5: sudola chatbot (Tavily arastirma + Gemini soru-cevap / oneri) ---
 from pydantic import BaseModel
+from typing import Optional
 from dotenv import load_dotenv
 load_dotenv()
 from secret_helper import get_secret_or_env
@@ -381,6 +382,8 @@ class SudolaOneriSonuc(BaseModel):
     aciklama: str
     guclu_yonler: list[str]
     riskler: list[str]
+    onerilen_proje_id: Optional[str] = None
+    onerilen_proje_adi: Optional[str] = None
 
 
 def _firsat_bul(link: str):
@@ -484,6 +487,18 @@ def sudola_soru(link: str, soru: str):
     return {"cevap": cevap, "arastirma_kullanildi": sudola_tavily_client is not None}
 
 
+def _projeler_baglam_metni(projeler: list) -> str:
+    if not projeler:
+        return "(ekibin henuz kayitli bir projesi yok)"
+    satirlar = []
+    for p in projeler:
+        satirlar.append(
+            "- id: " + str(p.get("id")) + " | ad: " + str(p.get("ad", "")) +
+            " | durum: " + str(p.get("durum", "")) + " | aciklama: " + str(p.get("aciklama", ""))
+        )
+    return "\n".join(satirlar)
+
+
 @app.get("/sudola/oneri/{link:path}")
 def sudola_oneri(link: str):
     firsat = _firsat_bul(link)
@@ -495,6 +510,8 @@ def sudola_oneri(link: str):
 
     baglam = _firsat_baglam_metni(firsat)
     arastirma = _sudola_arastirma_yap(firsat)
+    projeler = dosya_oku(PROJELER_DOSYA, [])
+    proje_baglam = _projeler_baglam_metni(projeler)
 
     prompt = (
         'Sen "Sudo" adinda bir firsat degerlendirme asistanisin. Asagidaki bilgilere dayanarak '
@@ -503,7 +520,14 @@ def sudola_oneri(link: str):
         'kazananlarin basvuru profili gibi) ilgili olmalidir. ORGANIZATORUN siyasi veya sosyal '
         'egilimini ASLA degerlendirmeye katma - sadece firsatin objektif nitelikleri ve gecmis kazanma '
         'orunekleri onemli.\n\n'
+        'Ayrica asagida ekibin mevcut projelerinin bir listesi var. Eger bu firsat, listedeki '
+        'projelerden biriyle ACIK ve OBJEKTIF bir sekilde iliskiliyse (ayni konu, teknoloji, hedef '
+        'kitle ya da amac ortakligi), o projenin id degerini onerilen_proje_id alaninda, adini '
+        'onerilen_proje_adi alaninda don. Eger listede net bicimde uyan bir proje YOKSA, '
+        'onerilen_proje_id ve onerilen_proje_adi alanlarini null birak - ASLA zorlama veya belirsiz '
+        'bir eslesme uydurma.\n\n'
         '--- FIRSAT BILGILERI ---\n' + baglam + '\n\n'
+        '--- EKIP PROJELERI ---\n' + proje_baglam + '\n\n'
         '--- GECMIS KAZANANLAR ARASTIRMASI (internetten) ---\n' + arastirma
     )
 
@@ -518,7 +542,26 @@ def sudola_oneri(link: str):
         )
         if not response.parsed:
             raise ValueError("bos parsed")
-        return response.parsed.model_dump()
+        sonuc = response.parsed.model_dump()
+
+        gecerli_id_ler = {p.get("id") for p in projeler}
+        if sonuc.get("onerilen_proje_id") not in gecerli_id_ler:
+            sonuc["onerilen_proje_id"] = None
+            sonuc["onerilen_proje_adi"] = None
+
+        if _db.DATABASE_URL:
+            firsat_id = _db.get_firsat_id_by_link(link)
+            if firsat_id:
+                _db.save_sudola_onerisi(
+                    firsat_id=firsat_id,
+                    onerilen_proje_id=sonuc.get("onerilen_proje_id"),
+                    skor=sonuc.get("skor"),
+                    aciklama=sonuc.get("aciklama"),
+                    guclu_yonler=sonuc.get("guclu_yonler", []),
+                    riskler=sonuc.get("riskler", []),
+                )
+
+        return sonuc
     except HTTPException:
         raise
     except Exception as e:
