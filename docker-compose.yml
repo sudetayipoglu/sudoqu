@@ -1,16 +1,41 @@
 services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sudoqu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: sudoqu
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sudoqu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
-    ports:
-      - "8000:8000"
+    restart: unless-stopped
     env_file:
       - ./backend/.env
-    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://sudoqu:${POSTGRES_PASSWORD}@postgres:5432/sudoqu
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend/proje_dosyalari:/app/proje_dosyalari
 
   frontend:
     build: ./frontend
-    ports:
-      - "3000:3000"
     restart: unless-stopped
     depends_on:
       - backend
+    ports:
+      - "3001:3000"
+
+volumes:
+  postgres_data:

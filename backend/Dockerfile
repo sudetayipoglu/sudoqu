@@ -6,7 +6,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
-COPY *.json ./
+COPY schema.sql ./
+COPY ekip.json* ./
+COPY firsatlar.json* ./
+COPY tasklar.json* ./
+COPY basvurular.json* ./
+COPY projeler.json* ./
 
 EXPOSE 8000
 
