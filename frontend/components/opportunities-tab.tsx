@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ArrowUpRight, CalendarDays, Check, Loader2, Search, Sparkles, X } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
-import { markApplied, type Opportunity } from "@/lib/api"
+import { markApplied, getProjeler, getSudolaSonOneri, type Opportunity, type Proje, type SudolaSonOneri } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { SudolaPanel } from "@/components/sudola-panel"
 import {
@@ -78,6 +78,15 @@ export function OpportunitiesTab({
   const [seciliMaliyetler, setSeciliMaliyetler] = useState<Set<MaliyetDurumu>>(new Set())
   const [gosterilenSayisi, setGosterilenSayisi] = useState(60)
 
+  const [projeler, setProjeler] = useState<Proje[]>([])
+  const [basvuruAcikId, setBasvuruAcikId] = useState<string | null>(null)
+  const [basvuruSecim, setBasvuruSecim] = useState<Record<string, string>>({})
+  const [basvuruOnerisi, setBasvuruOnerisi] = useState<Record<string, SudolaSonOneri | null>>({})
+
+  useEffect(() => {
+    getProjeler().then(setProjeler).catch(() => {})
+  }, [])
+
   useEffect(() => {
     setGosterilenSayisi(60)
   }, [query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
@@ -146,16 +155,32 @@ export function OpportunitiesTab({
 
   const gosterilecekler = useMemo(() => filtered.slice(0, gosterilenSayisi), [filtered, gosterilenSayisi])
 
-  async function handleApply(o: Opportunity) {
+  async function handleApply(o: Opportunity, projeId?: string) {
     if (o.basvuruldu || pending) return
     setPending(o.id)
     try {
-      await markApplied(o.link || o.id)
+      await markApplied(o.link || o.id, projeId || undefined)
       onApplied(o.id)
+      setBasvuruAcikId(null)
     } catch (err) {
       console.log("[v0] markApplied error:", (err as Error).message)
     } finally {
       setPending(null)
+    }
+  }
+
+  async function acBasvuruSecici(o: Opportunity) {
+    setBasvuruAcikId(o.id)
+    if (basvuruOnerisi[o.id] !== undefined) return
+    try {
+      const sonuc = await getSudolaSonOneri(o.link || o.id)
+      setBasvuruOnerisi((m) => ({ ...m, [o.id]: sonuc }))
+      setBasvuruSecim((m) =>
+        m[o.id] !== undefined ? m : { ...m, [o.id]: sonuc.onerilenProjeId ?? "" },
+      )
+    } catch (err) {
+      console.log("[v0] getSudolaSonOneri error:", (err as Error).message)
+      setBasvuruOnerisi((m) => ({ ...m, [o.id]: null }))
     }
   }
 
@@ -293,7 +318,7 @@ export function OpportunitiesTab({
                   type="button"
                   onClick={(e) => {
                   e.stopPropagation()
-                  handleApply(o)
+                  acBasvuruSecici(o)
                 }}
                   disabled={o.basvuruldu || pending === o.id}
                   className={cn(
@@ -315,6 +340,58 @@ export function OpportunitiesTab({
                     "Başvur olarak işaretle"
                   )}
                 </button>
+                  {basvuruAcikId === o.id && !o.basvuruldu && (
+                    <div
+                      className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <label className="block text-xs font-medium text-muted-foreground">
+                        İlişkili proje (opsiyonel)
+                      </label>
+                      <select
+                        value={basvuruSecim[o.id] ?? ""}
+                        onChange={(e) => setBasvuruSecim((m) => ({ ...m, [o.id]: e.target.value }))}
+                        className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Proje seçme</option>
+                        {projeler.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.ad}
+                          </option>
+                        ))}
+                      </select>
+                      {basvuruOnerisi[o.id]?.onerilenProjeAdi && (
+                        <p className="text-xs text-muted-foreground">
+                          Sudo önerisi:{" "}
+                          <span className="font-medium text-foreground">
+                            {basvuruOnerisi[o.id]?.onerilenProjeAdi}
+                          </span>
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleApply(o, basvuruSecim[o.id] || undefined)}
+                          disabled={pending === o.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-all hover:brightness-110"
+                        >
+                          {pending === o.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                          Onayla
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBasvuruAcikId(null)}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          Vazgeç
+                        </button>
+                      </div>
+                    </div>
+                  )}
               </article>
             </Reveal>
           ))}

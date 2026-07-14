@@ -87,16 +87,21 @@ def basvurulari_getir():
     return list(dosya_oku(BASVURULAR_DOSYA, {}).values())
 
 @app.post("/basvurular/{link:path}")
-def basvuru_ekle(link: str):
+def basvuru_ekle(link: str, proje_id: str = None):
     firsatlar = dosya_oku(FIRSATLAR_DOSYA, [])
     basvurular = dosya_oku(BASVURULAR_DOSYA, {})
     secilen = next((f for f in firsatlar if f["link"] == link), None)
     if not secilen:
         return {"hata": "Fırsat bulunamadı"}
+    if proje_id:
+        projeler = dosya_oku(PROJELER_DOSYA, [])
+        if not any(p.get("id") == proje_id for p in projeler):
+            proje_id = None
     basvurular[link] = {
         "baslik": secilen["baslik"],
         "link": link,
-        "durum": "beklemede"
+        "durum": "beklemede",
+        "proje_id": proje_id,
     }
     dosya_yaz(BASVURULAR_DOSYA, basvurular)
     return {"basari": True, "eklenen": basvurular[link]}
@@ -568,3 +573,32 @@ def sudola_oneri(link: str):
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
             raise HTTPException(status_code=429, detail="Gemini gunluk kota sinirina ulasildi, lutfen daha sonra tekrar deneyin")
         raise HTTPException(status_code=502, detail=f"Gemini hatasi: {type(e).__name__}")
+
+
+@app.get("/sudola/oneri-son")
+def sudola_oneri_son(link: str):
+    """C2: Onceden persist edilmis sudola onerisini Gemini'yi tekrar
+    cagirmadan dondurur. Proje secici varsayilanini doldurmak icin kullanilir."""
+    bos = {"onerilen_proje_id": None, "onerilen_proje_adi": None, "skor": None}
+    if not _db.DATABASE_URL:
+        return bos
+    firsat_id = _db.get_firsat_id_by_link(link)
+    if not firsat_id:
+        return bos
+    son = _db.get_son_sudola_onerisi(firsat_id)
+    if not son:
+        return bos
+    onerilen_proje_id = son.get("onerilen_proje_id")
+    onerilen_proje_adi = None
+    if onerilen_proje_id:
+        projeler = dosya_oku(PROJELER_DOSYA, [])
+        eslesen = next((p for p in projeler if p.get("id") == onerilen_proje_id), None)
+        if eslesen:
+            onerilen_proje_adi = eslesen.get("ad")
+        else:
+            onerilen_proje_id = None
+    return {
+        "onerilen_proje_id": onerilen_proje_id,
+        "onerilen_proje_adi": onerilen_proje_adi,
+        "skor": son.get("skor"),
+    }

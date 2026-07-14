@@ -144,8 +144,9 @@ export async function getApplications(): Promise<Application[]> {
   }))
 }
 
-export async function markApplied(link: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/basvurular/${encodeURIComponent(link)}`, {
+export async function markApplied(link: string, projeId?: string | null): Promise<void> {
+  const qs = projeId ? `?${new URLSearchParams({ proje_id: projeId }).toString()}` : ""
+  const res = await fetch(`${API_BASE}/basvurular/${encodeURIComponent(link)}${qs}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
   })
@@ -342,5 +343,28 @@ export async function sudolaOneri(link: string): Promise<SudolaOneri> {
     aciklama: String(data.aciklama ?? ""),
     gucluYonler: Array.isArray(data.guclu_yonler) ? data.guclu_yonler.map(String) : [],
     riskler: Array.isArray(data.riskler) ? data.riskler.map(String) : [],
+  }
+}
+
+export interface SudolaSonOneri {
+  onerilenProjeId: string | null
+  onerilenProjeAdi: string | null
+  skor: number | null
+}
+
+export async function getSudolaSonOneri(link: string): Promise<SudolaSonOneri> {
+  const params = new URLSearchParams({ link })
+  const res = await fetch(`${API_BASE}/sudola/oneri-son?${params.toString()}`, {
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) {
+    return { onerilenProjeId: null, onerilenProjeAdi: null, skor: null }
+  }
+  const data = await res.json().catch(() => null)
+  if (!data) return { onerilenProjeId: null, onerilenProjeAdi: null, skor: null }
+  return {
+    onerilenProjeId: data.onerilen_proje_id ?? null,
+    onerilenProjeAdi: data.onerilen_proje_adi ?? null,
+    skor: data.skor ?? null,
   }
 }
