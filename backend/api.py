@@ -11,6 +11,13 @@ from datetime import datetime
 
 app = FastAPI(title="SudoQu API")
 
+from db import init_schema as _init_schema
+
+@app.on_event("startup")
+def _on_startup():
+    _init_schema()
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,13 +37,40 @@ MAKS_METIN_UZUNLUGU = 5000
 _github_cache = {}
 _GITHUB_CACHE_TTL = 600  # 10 dakika - 60 istek/saat limitine karsi
 
+import db as _db
+
+_PG_OKU = {
+    "firsatlar.json": _db.load_firsatlar,
+    "basvurular.json": _db.load_basvurular,
+    "tasklar.json": _db.load_tasklar,
+    "ekip.json": _db.load_ekip,
+    "projeler.json": _db.load_projeler,
+}
+_PG_YAZ = {
+    "firsatlar.json": _db.save_firsatlar,
+    "basvurular.json": _db.save_basvurular,
+    "tasklar.json": _db.save_tasklar,
+    "ekip.json": _db.save_ekip,
+    "projeler.json": _db.save_projeler,
+}
+
+
 def dosya_oku(yol, varsayilan):
+    if _db.DATABASE_URL:
+        fn = _PG_OKU.get(os.path.basename(yol))
+        if fn:
+            return fn()
     if os.path.exists(yol):
         with open(yol, encoding="utf-8") as f:
             return json.load(f)
     return varsayilan
 
 def dosya_yaz(yol, veri):
+    if _db.DATABASE_URL:
+        fn = _PG_YAZ.get(os.path.basename(yol))
+        if fn:
+            fn(veri)
+            return
     with open(yol, "w", encoding="utf-8") as f:
         json.dump(veri, f, ensure_ascii=False, indent=2)
 

@@ -6,6 +6,7 @@ from datetime import datetime
 
 load_dotenv()
 from secret_helper import get_secret_or_env
+import db as _db
 api_key = get_secret_or_env("tavily-api-key", "TAVILY_API_KEY")
 client = TavilyClient(api_key=api_key)
 
@@ -394,11 +395,14 @@ else:
         except Exception as e:
             print(f"  Hata: {e}")
 
-try:
-    with open("firsatlar.json", "r", encoding="utf-8") as f:
-        mevcut_liste = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    mevcut_liste = []
+if _db.DATABASE_URL:
+    mevcut_liste = _db.load_firsatlar()
+else:
+    try:
+        with open("firsatlar.json", "r", encoding="utf-8") as f:
+            mevcut_liste = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        mevcut_liste = []
 
 mevcut_dict = {}
 for kayit in mevcut_liste:
@@ -445,7 +449,10 @@ for idx, kayit in enumerate(islenecekler):
     if sonuc:
         toplam_in_token += sonuc["input_tokens"]
         toplam_out_token += sonuc["output_tokens"]
-    json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    if _db.DATABASE_URL:
+        _db.save_firsatlar(list(mevcut_dict.values()))
+    else:
+        json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
         _time.sleep(GEMINI_MIN_INTERVAL)
 
@@ -456,8 +463,11 @@ _dup_sayisi, _dup_gruplari = tekillestir(list(mevcut_dict.values()))
 if _dup_sayisi:
     print(f"\nTekillestirme: {len(_dup_gruplari)} grup, toplam {_dup_sayisi} kayit duplicate olarak isaretlendi.")
 
-with open("firsatlar.json", "w", encoding="utf-8") as f:
-    json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
+if _db.DATABASE_URL:
+    _db.save_firsatlar(list(mevcut_dict.values()))
+else:
+    with open("firsatlar.json", "w", encoding="utf-8") as f:
+        json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
 
 print(f"\nToplam {len(mevcut_dict)} benzersiz firsat firsatlar.json dosyasina kaydedildi.")
 print(f"Extraction ozeti: basarili={basarili_sayisi}, basarisiz={basarisiz_sayisi}, atlandi_genel_sayfa={atlandi_sayisi}")
