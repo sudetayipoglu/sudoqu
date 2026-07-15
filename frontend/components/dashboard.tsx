@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { AlertTriangle, CalendarCheck, FileText, FolderGit2, Loader2, RefreshCw, Sparkles, Target } from "lucide-react"
 import { Reveal } from "@/components/reveal"
+import { suresiGecmisMi } from "@/lib/opportunity-utils"
 import { OpportunitiesTab } from "@/components/opportunities-tab"
 import { TasksTab } from "@/components/tasks-tab"
 import { ApplicationsTab } from "@/components/applications-tab"
@@ -41,6 +42,10 @@ export function Dashboard() {
   const ekip = useSWR<string[]>("ekip", getEkip)
 
   const opps = opportunities.data ?? []
+  const gecerliOpps = useMemo(
+    () => opps.filter((o) => !o.duplicateOf && !suresiGecmisMi(o.sonBasvuruTarihi)),
+    [opps],
+  )
   const taskList = tasks.data ?? []
   const apps = applications.data ?? []
   const projeList = projeler.data ?? []
@@ -106,7 +111,7 @@ export function Dashboard() {
                 <Target className="h-4 w-4" />
               </span>
               <div>
-                <div className="text-2xl font-semibold leading-none text-gradient">{opps.length}</div>
+                <div className="text-2xl font-semibold leading-none text-gradient">{gecerliOpps.length}</div>
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Toplam Fırsat</div>
               </div>
             </div>
