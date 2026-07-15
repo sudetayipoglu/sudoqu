@@ -136,8 +136,15 @@ def taskları_getir():
     return dosya_oku(TASKLAR_DOSYA, [])
 
 @app.post("/tasklar")
-def task_ekle(baslik: str, atanan: str, tur: str = "task", deadline: str = None):
+def task_ekle(baslik: str, atanan: str, tur: str = "task", deadline: str = None, proje_id: str = None, firsat_id: str = None):
     tasklar = dosya_oku(TASKLAR_DOSYA, [])
+    if proje_id:
+        projeler = dosya_oku(PROJELER_DOSYA, [])
+        if not any(p.get("id") == proje_id for p in projeler):
+            proje_id = None
+    resolved_firsat_id = None
+    if firsat_id and _db.DATABASE_URL:
+        resolved_firsat_id = _db.get_firsat_id_by_link(firsat_id)
     yeni = {
         "id": len(tasklar) + 1,
         "baslik": baslik,
@@ -145,7 +152,9 @@ def task_ekle(baslik: str, atanan: str, tur: str = "task", deadline: str = None)
         "tur": tur,
         "deadline": deadline,
         "durum": "bekliyor",
-        "olusturma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
+        "olusturma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "proje_id": proje_id,
+        "firsat_id": resolved_firsat_id,
     }
     tasklar.append(yeni)
     dosya_yaz(TASKLAR_DOSYA, tasklar)
@@ -163,7 +172,7 @@ def task_tamamla(task_id: int):
 
 
 @app.put("/tasklar/{task_id}")
-def task_guncelle(task_id: int, baslik: str = None, atanan: str = None, tur: str = None, deadline: str = None):
+def task_guncelle(task_id: int, baslik: str = None, atanan: str = None, tur: str = None, deadline: str = None, proje_id: str = None, firsat_id: str = None):
     tasklar = dosya_oku(TASKLAR_DOSYA, [])
     for t in tasklar:
         if t["id"] == task_id:
@@ -178,6 +187,17 @@ def task_guncelle(task_id: int, baslik: str = None, atanan: str = None, tur: str
                 t["tur"] = tur
             if deadline is not None:
                 t["deadline"] = deadline or None
+            if proje_id is not None:
+                if proje_id == "":
+                    t["proje_id"] = None
+                else:
+                    projeler = dosya_oku(PROJELER_DOSYA, [])
+                    t["proje_id"] = proje_id if any(p.get("id") == proje_id for p in projeler) else None
+            if firsat_id is not None:
+                if firsat_id == "":
+                    t["firsat_id"] = None
+                else:
+                    t["firsat_id"] = _db.get_firsat_id_by_link(firsat_id) if _db.DATABASE_URL else None
             dosya_yaz(TASKLAR_DOSYA, tasklar)
             return t
     raise HTTPException(status_code=404, detail="Task bulunamadi")

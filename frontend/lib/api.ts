@@ -33,6 +33,11 @@ export interface Task {
   deadline: string
   durum: string
   tamamlandi: boolean
+  projeId: string | null
+  projeAdi: string | null
+  firsatId: string | null
+  firsatBaslik: string | null
+  firsatLink: string | null
   raw: Record<string, unknown>
 }
 
@@ -129,6 +134,11 @@ export async function getTasks(): Promise<Task[]> {
     deadline: pick(r, ["deadline", "son_tarih", "sonTarih", "bitis", "bitiş", "due", "due_date", "dueDate", "tarih"]),
     durum: pick(r, ["durum", "status", "state"], "beklemede"),
     tamamlandi: pickBool(r, ["tamamlandi", "tamamlandı", "completed", "done", "isDone"]) || String(r.durum ?? "").toLowerCase().includes("tamamlan"),
+    projeId: pickNullable(r, ["proje_id", "projeId"]),
+    projeAdi: pickNullable(r, ["proje_adi", "projeAdi"]),
+    firsatId: pickNullable(r, ["firsat_id", "firsatId"]),
+    firsatBaslik: pickNullable(r, ["firsat_baslik", "firsatBaslik"]),
+    firsatLink: pickNullable(r, ["firsat_link", "firsatLink"]),
     raw: r,
   }))
 }
@@ -161,9 +171,11 @@ export async function completeTask(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Görev tamamlanamadı (${res.status})`)
 }
 
-export async function createTask(baslik: string, atanan: string, tur: string, deadline: string): Promise<void> {
+export async function createTask(baslik: string, atanan: string, tur: string, deadline: string, projeId?: string, firsatId?: string): Promise<void> {
   const params = new URLSearchParams({ baslik, atanan, tur })
   if (deadline) params.set("deadline", deadline)
+  if (projeId) params.set("proje_id", projeId)
+  if (firsatId) params.set("firsat_id", firsatId)
   const res = await fetch(`${API_BASE}/tasklar?${params.toString()}`, {
     method: "POST",
     headers: { Accept: "application/json" },
@@ -171,12 +183,14 @@ export async function createTask(baslik: string, atanan: string, tur: string, de
   if (!res.ok) throw new Error(`Görev eklenemedi (${res.status})`)
 }
 
-export async function updateTask(id: string, fields: { baslik?: string; atanan?: string; tur?: string; deadline?: string }): Promise<void> {
+export async function updateTask(id: string, fields: { baslik?: string; atanan?: string; tur?: string; deadline?: string; projeId?: string | null; firsatId?: string | null }): Promise<void> {
   const params = new URLSearchParams()
   if (fields.baslik !== undefined) params.set("baslik", fields.baslik)
   if (fields.atanan !== undefined) params.set("atanan", fields.atanan)
   if (fields.tur !== undefined) params.set("tur", fields.tur)
   if (fields.deadline !== undefined) params.set("deadline", fields.deadline)
+  if (fields.projeId !== undefined) params.set("proje_id", fields.projeId ?? "")
+  if (fields.firsatId !== undefined) params.set("firsat_id", fields.firsatId ?? "")
   const res = await fetch(`${API_BASE}/tasklar/${encodeURIComponent(id)}?${params.toString()}`, {
     method: "PUT",
     headers: { Accept: "application/json" },

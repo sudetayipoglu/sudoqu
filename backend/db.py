@@ -263,18 +263,25 @@ def load_tasklar():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT t.id, t.baslik, e.isim, t.tur, t.deadline, t.durum, t.olusturma_tarihi
-                FROM tasklar t LEFT JOIN ekip e ON t.atanan_id = e.id
+                SELECT t.id, t.baslik, e.isim, t.tur, t.deadline, t.durum, t.olusturma_tarihi,
+                       t.firsat_id, t.proje_id, f.baslik, p.ad, f.link
+                FROM tasklar t
+                LEFT JOIN ekip e ON t.atanan_id = e.id
+                LEFT JOIN firsatlar f ON t.firsat_id = f.id
+                LEFT JOIN projeler p ON t.proje_id = p.id
                 ORDER BY t.id
             """)
             rows = cur.fetchall()
     finally:
         conn.close()
     out = []
-    for tid, baslik, isim, tur, deadline, durum, olusturma in rows:
+    for tid, baslik, isim, tur, deadline, durum, olusturma, firsat_id, proje_id, firsat_baslik, proje_adi, firsat_link in rows:
         out.append({
             "id": tid, "baslik": baslik, "atanan": isim or "belirsiz", "tur": tur,
             "deadline": deadline, "durum": durum, "olusturma_tarihi": _serialize(olusturma),
+            "firsat_id": firsat_id, "proje_id": proje_id,
+            "firsat_baslik": firsat_baslik, "proje_adi": proje_adi,
+            "firsat_link": firsat_link,
         })
     return out
 
@@ -297,13 +304,15 @@ def save_tasklar(items):
                     isim_to_id[atanan] = cur.fetchone()[0]
                 atanan_id = isim_to_id.get(atanan)
                 cur.execute(
-                    """INSERT INTO tasklar (id, baslik, atanan_id, tur, deadline, durum, olusturma_tarihi)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    """INSERT INTO tasklar (id, baslik, atanan_id, tur, deadline, durum, olusturma_tarihi, firsat_id, proje_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (id) DO UPDATE SET
                       baslik=EXCLUDED.baslik, atanan_id=EXCLUDED.atanan_id, tur=EXCLUDED.tur,
-                      deadline=EXCLUDED.deadline, durum=EXCLUDED.durum""",
+                      deadline=EXCLUDED.deadline, durum=EXCLUDED.durum,
+                      firsat_id=EXCLUDED.firsat_id, proje_id=EXCLUDED.proje_id""",
                     (t.get("id"), t.get("baslik"), atanan_id, t.get("tur"), t.get("deadline") or None,
-                     t.get("durum"), t.get("olusturma_tarihi") or None),
+                     t.get("durum"), t.get("olusturma_tarihi") or None,
+                     t.get("firsat_id"), t.get("proje_id")),
                 )
             cur.execute("SELECT setval(pg_get_serial_sequence('tasklar','id'), COALESCE((SELECT MAX(id) FROM tasklar), 1))")
         conn.commit()

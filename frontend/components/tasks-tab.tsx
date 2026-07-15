@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2 } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge, statusTone } from "@/components/status-badge"
-import { completeTask, createTask, updateTask, deleteTask, type Task } from "@/lib/api"
+import { completeTask, createTask, updateTask, deleteTask, getProjeler, getOpportunities, type Task, type Proje, type Opportunity } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 function formatDate(value: string) {
@@ -57,6 +57,18 @@ export function TasksTab({
   const [editDeadline, setEditDeadline] = useState("")
   const [editKaydediliyor, setEditKaydediliyor] = useState(false)
 
+  const [projeler, setProjeler] = useState<Proje[]>([])
+  const [firsatlar, setFirsatlar] = useState<Opportunity[]>([])
+  const [projeId, setProjeId] = useState("")
+  const [firsatId, setFirsatId] = useState("")
+  const [editProjeId, setEditProjeId] = useState("")
+  const [editFirsatId, setEditFirsatId] = useState("")
+
+  useEffect(() => {
+    getProjeler().then(setProjeler).catch(() => {})
+    getOpportunities().then(setFirsatlar).catch(() => {})
+  }, [])
+
   async function handleComplete(t: Task) {
     if (t.tamamlandi || pending) return
     setPending(t.id)
@@ -92,11 +104,13 @@ export function TasksTab({
     setGonderiliyor(true)
     setHata(null)
     try {
-      await createTask(baslik.trim(), (atanan || "belirsiz").trim(), tur, deadline)
+      await createTask(baslik.trim(), (atanan || "belirsiz").trim(), tur, deadline, projeId || undefined, firsatId || undefined)
       setBaslik("")
       setAtanan("")
       setTur("task")
       setDeadline("")
+      setProjeId("")
+      setFirsatId("")
       setFormAcik(false)
       onChanged()
     } catch (err) {
@@ -111,6 +125,8 @@ export function TasksTab({
     setEditBaslik(t.baslik)
     setEditAtanan(t.atanan === "belirsiz" ? "" : t.atanan)
     setEditDeadline(t.deadline || "")
+    setEditProjeId(t.projeId || "")
+    setEditFirsatId(t.firsatLink || "")
   }
 
   function handleDuzenleIptal() {
@@ -125,6 +141,8 @@ export function TasksTab({
         baslik: editBaslik.trim(),
         atanan: (editAtanan || "belirsiz").trim(),
         deadline: editDeadline,
+        projeId: editProjeId,
+        firsatId: editFirsatId,
       })
       setDuzenlenenId(null)
       onChanged()
@@ -192,6 +210,34 @@ export function TasksTab({
                   onChange={(e) => setDeadline(e.target.value)}
                   className={inputClass}
                 />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Proje (opsiyonel)</label>
+                <select
+                  value={projeId}
+                  onChange={(e) => setProjeId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Yok</option>
+                  {projeler.map((p) => (
+                    <option key={p.id} value={p.id}>{p.ad}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Fırsat (opsiyonel)</label>
+                <select
+                  value={firsatId}
+                  onChange={(e) => setFirsatId(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Yok</option>
+                  {firsatlar.map((f) => (
+                    <option key={f.link} value={f.link}>{f.baslik}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {hata && <p className="text-xs text-destructive">{hata}</p>}
@@ -278,7 +324,35 @@ export function TasksTab({
                           />
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Proje</label>
+                    <select
+                      value={editProjeId}
+                      onChange={(e) => setEditProjeId(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Yok</option>
+                      {projeler.map((p) => (
+                        <option key={p.id} value={p.id}>{p.ad}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">Fırsat</label>
+                    <select
+                      value={editFirsatId}
+                      onChange={(e) => setEditFirsatId(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Yok</option>
+                      {firsatlar.map((f) => (
+                        <option key={f.link} value={f.link}>{f.baslik}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => handleDuzenleKaydet(t)}
@@ -335,6 +409,12 @@ export function TasksTab({
                       <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                         <Meta icon={<User className="h-3.5 w-3.5" />} label="Atanan" value={t.atanan || "—"} />
                         <Meta icon={<Tag className="h-3.5 w-3.5" />} label="Tür" value={t.tur || "—"} />
+            {t.projeAdi && (
+              <Meta icon={<Briefcase className="h-3.5 w-3.5" />} label="Proje" value={t.projeAdi} />
+            )}
+            {t.firsatBaslik && (
+              <Meta icon={<Link2 className="h-3.5 w-3.5" />} label="Fırsat" value={t.firsatBaslik} />
+            )}
                         <div className="flex items-center gap-1.5">
                           <span className="text-muted-foreground">
                             <CalendarClock className="h-3.5 w-3.5" />
