@@ -538,11 +538,19 @@ def sudola_soru(link: str, soru: str):
     baglam = _firsat_baglam_metni(firsat)
     arastirma = _sudola_arastirma_yap(firsat)
 
+    _TR_AY_ADLARI = ['', 'Ocak', 'Subat', 'Mart', 'Nisan', 'Mayis', 'Haziran',
+                     'Temmuz', 'Agustos', 'Eylul', 'Ekim', 'Kasim', 'Aralik']
+    _simdi = datetime.now()
+    bugun_str = f"{_simdi.day} {_TR_AY_ADLARI[_simdi.month]} {_simdi.year} (YYYY-MM-DD: {_simdi.strftime('%Y-%m-%d')})"
+
     prompt = (
-        'Sen "Sudo" adinda bir firsat asistanisin. Asagida bir yarisma/etkinlik firsatiyla ilgili '
-        'elimizdeki bilgiler ve internet arastirmasindan gecmis kazananlar hakkinda bulunan bilgiler var. '
+        'Sen "Sudo" adinda bir firsat asistanisin. Asagida bir yarisma/etkinlik '
+        'firsatiyla ilgili elimizdeki bilgiler ve internet arastirmasindan gecmis kazananlar hakkinda bulunan bilgiler var. '
         'Sadece bu bilgilere dayanarak kullanicinin sorusunu Turkce, net ve kisa cevapla. Eger cevap '
-        'bu bilgilerde yoksa, uydurma - "Bu konuda elimde bilgi yok" gibi durustce belirt.\n\n'
+        'bu bilgilerde yoksa, uydurma - "Bu konuda elimde bilgi yok" gibi durustce belirt. '
+        'Tarihle ilgili sorularda (kac gun kaldi, suresi gecti mi, ne zaman gibi) SADECE asagida verilen '
+        'BUGUNUN TARIHI bilgisini gercek referans olarak kullan - kendi bilgine veya varsayimina ASLA guvenme.\n\n'
+        '--- BUGUNUN TARIHI ---\n' + bugun_str + '\n\n'
         '--- FIRSAT BILGILERI ---\n' + baglam + '\n\n'
         '--- GECMIS KAZANANLAR ARASTIRMASI (internetten) ---\n' + arastirma + '\n\n'
         '--- KULLANICI SORUSU ---\n' + soru + '\n\nCevap:'
