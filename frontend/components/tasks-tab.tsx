@@ -265,7 +265,15 @@ export function TasksTab({
     }
   }
 
-  const filtered = filterKisi === "hepsi" ? items : items.filter((t) => (t.atanan || "belirsiz") === filterKisi)
+  const filtered =
+    filterKisi === "hepsi"
+      ? items
+      : items.filter((t) =>
+          (t.atanan || "belirsiz")
+            .split(",")
+            .map((s) => s.trim())
+            .includes(filterKisi),
+        )
 
   return (
     <div className="space-y-5">
@@ -296,13 +304,13 @@ export function TasksTab({
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Atanan</label>
+                <label className="mb-1 block text-xs text-muted-foreground">Atanan(lar)</label>
                 <input
                   list="ekip-listesi"
                   value={atanan}
                   onChange={(e) => setAtanan(e.target.value)}
                   className={inputClass}
-                  placeholder="belirsiz"
+                  placeholder="belirsiz (birden fazla kisi icin virgulle ayirin: orn. sudo, yeno)"
                 />
                 <datalist id="ekip-listesi">
                   {ekip.map((kisi) => (
@@ -444,13 +452,13 @@ export function TasksTab({
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
-                          <label className="mb-1 block text-xs text-muted-foreground">Atanan</label>
+                          <label className="mb-1 block text-xs text-muted-foreground">Atanan(lar)</label>
                           <input
                             list="ekip-listesi"
                             value={editAtanan}
                             onChange={(e) => setEditAtanan(e.target.value)}
                             className={inputClass}
-                            placeholder="belirsiz"
+                            placeholder="belirsiz (birden fazla kisi icin virgulle ayirin: orn. sudo, yeno)"
                           />
                         </div>
                         <div>

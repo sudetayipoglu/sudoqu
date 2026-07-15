@@ -272,12 +272,22 @@ def load_tasklar():
                 ORDER BY t.id
             """)
             rows = cur.fetchall()
+            cur.execute("""
+                SELECT ta.task_id, e2.isim
+                FROM task_atananlar ta
+                JOIN ekip e2 ON ta.ekip_id = e2.id
+                ORDER BY ta.task_id, e2.isim
+            """)
+            coklu_atanan = {}
+            for tid2, isim2 in cur.fetchall():
+                coklu_atanan.setdefault(tid2, []).append(isim2)
     finally:
         conn.close()
     out = []
     for tid, baslik, isim, tur, deadline, durum, olusturma, firsat_id, proje_id, firsat_baslik, proje_adi, firsat_link in rows:
+        isimler = coklu_atanan.get(tid) or ([isim] if isim else [])
         out.append({
-            "id": tid, "baslik": baslik, "atanan": isim or "belirsiz", "tur": tur,
+            "id": tid, "baslik": baslik, "atanan": (", ".join(isimler) if isimler else "belirsiz"), "tur": tur,
             "deadline": deadline, "durum": durum, "olusturma_tarihi": _serialize(olusturma),
             "firsat_id": firsat_id, "proje_id": proje_id,
             "firsat_baslik": firsat_baslik, "proje_adi": proje_adi,
@@ -298,22 +308,32 @@ def save_tasklar(items):
             else:
                 cur.execute("DELETE FROM tasklar")
             for t in items:
-                atanan = t.get("atanan")
-                if atanan and atanan not in isim_to_id:
-                    cur.execute("INSERT INTO ekip (isim) VALUES (%s) RETURNING id", (atanan,))
-                    isim_to_id[atanan] = cur.fetchone()[0]
-                atanan_id = isim_to_id.get(atanan)
+                atanan_raw = t.get("atanan") or ""
+                isimler = [x.strip() for x in atanan_raw.split(",") if x.strip()]
+                for isim_tek in isimler:
+                    if isim_tek not in isim_to_id:
+                        cur.execute("INSERT INTO ekip (isim) VALUES (%s) RETURNING id", (isim_tek,))
+                        isim_to_id[isim_tek] = cur.fetchone()[0]
+                atanan_ids = [isim_to_id[x] for x in isimler]
+                atanan_id = atanan_ids[0] if atanan_ids else None
                 cur.execute(
                     """INSERT INTO tasklar (id, baslik, atanan_id, tur, deadline, durum, olusturma_tarihi, firsat_id, proje_id)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (id) DO UPDATE SET
-                      baslik=EXCLUDED.baslik, atanan_id=EXCLUDED.atanan_id, tur=EXCLUDED.tur,
-                      deadline=EXCLUDED.deadline, durum=EXCLUDED.durum,
-                      firsat_id=EXCLUDED.firsat_id, proje_id=EXCLUDED.proje_id""",
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                       ON CONFLICT (id) DO UPDATE SET
+                         baslik=EXCLUDED.baslik, atanan_id=EXCLUDED.atanan_id, tur=EXCLUDED.tur,
+                         deadline=EXCLUDED.deadline, durum=EXCLUDED.durum,
+                         firsat_id=EXCLUDED.firsat_id, proje_id=EXCLUDED.proje_id""",
                     (t.get("id"), t.get("baslik"), atanan_id, t.get("tur"), t.get("deadline") or None,
                      t.get("durum"), t.get("olusturma_tarihi") or None,
                      t.get("firsat_id"), t.get("proje_id")),
                 )
+                gorev_id = t.get("id")
+                cur.execute("DELETE FROM task_atananlar WHERE task_id = %s", (gorev_id,))
+                for eid in atanan_ids:
+                    cur.execute(
+                        "INSERT INTO task_atananlar (task_id, ekip_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                        (gorev_id, eid),
+                    )
             cur.execute("SELECT setval(pg_get_serial_sequence('tasklar','id'), COALESCE((SELECT MAX(id) FROM tasklar), 1))")
         conn.commit()
     finally:
