@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ArrowUpRight, CalendarDays, Check, Loader2, Search, Sparkles, X } from "lucide-react"
+import { ArrowUpRight, CalendarDays, Check, Loader2, Plus, Search, Sparkles, X } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
-import { markApplied, getProjeler, getSudolaSonOneri, type Opportunity, type Proje, type SudolaSonOneri } from "@/lib/api"
+import { markApplied, getProjeler, getSudolaSonOneri, addManualFirsat, type Opportunity, type Proje, type SudolaSonOneri } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { SudolaPanel } from "@/components/sudola-panel"
 import {
@@ -62,11 +62,13 @@ export function OpportunitiesTab({
   onApplied,
   initialLink = null,
   onInitialLinkConsumed,
+  onChanged,
 }: {
   items: Opportunity[]
   onApplied: (id: string) => void
   initialLink?: string | null
   onInitialLinkConsumed?: () => void
+  onChanged?: () => void
 }) {
   const [query, setQuery] = useState("")
   const [pending, setPending] = useState<string | null>(null)
@@ -82,6 +84,17 @@ export function OpportunitiesTab({
   const [basvuruAcikId, setBasvuruAcikId] = useState<string | null>(null)
   const [basvuruSecim, setBasvuruSecim] = useState<Record<string, string>>({})
   const [basvuruOnerisi, setBasvuruOnerisi] = useState<Record<string, SudolaSonOneri | null>>({})
+
+  const [manuelAcik, setManuelAcik] = useState(false)
+  const [manuelBaslik, setManuelBaslik] = useState("")
+  const [manuelOrganizator, setManuelOrganizator] = useState("")
+  const [manuelKonuKategori, setManuelKonuKategori] = useState("")
+  const [manuelSonBasvuru, setManuelSonBasvuru] = useState("")
+  const [manuelYerMekan, setManuelYerMekan] = useState("")
+  const [manuelOdulMiktariTuru, setManuelOdulMiktariTuru] = useState("")
+  const [manuelKatilimSartlari, setManuelKatilimSartlari] = useState("")
+  const [manuelGonderiliyor, setManuelGonderiliyor] = useState(false)
+  const [manuelHata, setManuelHata] = useState<string | null>(null)
 
   useEffect(() => {
     getProjeler().then(setProjeler).catch(() => {})
@@ -184,6 +197,41 @@ export function OpportunitiesTab({
     }
   }
 
+  async function handleManuelEkle(e: React.FormEvent) {
+    e.preventDefault()
+    const baslik = manuelBaslik.trim()
+    if (!baslik) {
+      setManuelHata("Baslik gerekli")
+      return
+    }
+    setManuelGonderiliyor(true)
+    setManuelHata(null)
+    try {
+      await addManualFirsat({
+        baslik,
+        organizator: manuelOrganizator.trim() || undefined,
+        konuKategori: manuelKonuKategori.trim() || undefined,
+        sonBasvuruTarihi: manuelSonBasvuru.trim() || undefined,
+        yerMekan: manuelYerMekan.trim() || undefined,
+        odulMiktariTuru: manuelOdulMiktariTuru.trim() || undefined,
+        katilimSartlari: manuelKatilimSartlari.trim() || undefined,
+      })
+      setManuelBaslik("")
+      setManuelOrganizator("")
+      setManuelKonuKategori("")
+      setManuelSonBasvuru("")
+      setManuelYerMekan("")
+      setManuelOdulMiktariTuru("")
+      setManuelKatilimSartlari("")
+      setManuelAcik(false)
+      onChanged?.()
+    } catch (err) {
+      setManuelHata((err as Error).message)
+    } finally {
+      setManuelGonderiliyor(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Reveal className="relative">
@@ -196,6 +244,93 @@ export function OpportunitiesTab({
           className="w-full rounded-xl border border-border bg-card/60 py-3 pl-11 pr-4 text-sm text-foreground outline-none backdrop-blur transition-colors placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
         />
       </Reveal>
+
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setManuelAcik((v) => !v)}
+          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:brightness-110"
+        >
+          {manuelAcik ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {manuelAcik ? "Vazgec" : "Manuel Firsat Ekle"}
+        </button>
+      </div>
+
+      {manuelAcik && (
+        <Reveal className="rounded-2xl border border-border bg-card/60 p-5 backdrop-blur">
+          <form onSubmit={handleManuelEkle} className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Baslik</label>
+              <input
+                value={manuelBaslik}
+                onChange={(e) => setManuelBaslik(e.target.value)}
+                maxLength={300}
+                className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Organizator (opsiyonel)</label>
+                <input
+                  value={manuelOrganizator}
+                  onChange={(e) => setManuelOrganizator(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Konu / Kategori (opsiyonel)</label>
+                <input
+                  value={manuelKonuKategori}
+                  onChange={(e) => setManuelKonuKategori(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Son Basvuru Tarihi (opsiyonel)</label>
+                <input
+                  value={manuelSonBasvuru}
+                  onChange={(e) => setManuelSonBasvuru(e.target.value)}
+                  placeholder="2026-08-01"
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Yer / Mekan (opsiyonel)</label>
+                <input
+                  value={manuelYerMekan}
+                  onChange={(e) => setManuelYerMekan(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Odul Miktari / Turu (opsiyonel)</label>
+                <input
+                  value={manuelOdulMiktariTuru}
+                  onChange={(e) => setManuelOdulMiktariTuru(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted-foreground">Katilim Sartlari (opsiyonel)</label>
+                <input
+                  value={manuelKatilimSartlari}
+                  onChange={(e) => setManuelKatilimSartlari(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                />
+              </div>
+            </div>
+            {manuelHata && <p className="text-xs text-destructive">{manuelHata}</p>}
+            <button
+              type="submit"
+              disabled={manuelGonderiliyor}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:brightness-110 disabled:opacity-60"
+            >
+              {manuelGonderiliyor && <Loader2 className="h-4 w-4 animate-spin" />}
+              Firsati Kaydet
+            </button>
+          </form>
+        </Reveal>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <select

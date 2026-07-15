@@ -171,6 +171,32 @@ export async function completeTask(id: string): Promise<void> {
   if (!res.ok) throw new Error(`Görev tamamlanamadı (${res.status})`)
 }
 
+export async function addManualFirsat(fields: {
+  baslik: string
+  organizator?: string
+  konuKategori?: string
+  sonBasvuruTarihi?: string
+  yerMekan?: string
+  odulMiktariTuru?: string
+  katilimSartlari?: string
+}): Promise<void> {
+  const params = new URLSearchParams({ baslik: fields.baslik })
+  if (fields.organizator) params.set("organizator", fields.organizator)
+  if (fields.konuKategori) params.set("konu_kategori", fields.konuKategori)
+  if (fields.sonBasvuruTarihi) params.set("son_basvuru_tarihi", fields.sonBasvuruTarihi)
+  if (fields.yerMekan) params.set("yer_mekan", fields.yerMekan)
+  if (fields.odulMiktariTuru) params.set("odul_miktari_turu", fields.odulMiktariTuru)
+  if (fields.katilimSartlari) params.set("katilim_sartlari", fields.katilimSartlari)
+  const res = await fetch(`${API_BASE}/firsatlar/manuel?${params.toString()}`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail || `Fırsat eklenemedi (${res.status})`)
+  }
+}
+
 export async function createTask(baslik: string, atanan: string, tur: string, deadline: string, projeId?: string, firsatId?: string): Promise<void> {
   const params = new URLSearchParams({ baslik, atanan, tur })
   if (deadline) params.set("deadline", deadline)

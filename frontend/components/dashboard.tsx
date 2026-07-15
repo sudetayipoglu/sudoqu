@@ -154,7 +154,7 @@ export function Dashboard() {
         <ErrorState onRetry={refreshAll} />
       ) : (
         <section>
-          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} />}
+          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} onChanged={() => opportunities.mutate()} />}
           {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
           {tab === "basvurular" && <ApplicationsTab items={apps} onChanged={() => applications.mutate()} onGoToOpportunity={(link) => { setTab("firsatlar"); setHighlightLink(link) }} />}
         {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}

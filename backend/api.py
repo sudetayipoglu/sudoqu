@@ -82,6 +82,53 @@ def anasayfa():
 def firsatlari_getir():
     return dosya_oku(FIRSATLAR_DOSYA, [])
 
+@app.post("/firsatlar/manuel")
+def firsat_manuel_ekle(
+    baslik: str,
+    organizator: str = None,
+    konu_kategori: str = None,
+    son_basvuru_tarihi: str = None,
+    yer_mekan: str = None,
+    odul_miktari_turu: str = None,
+    katilim_sartlari: str = None,
+    link: str = None,
+):
+    baslik = (baslik or "").strip()
+    if not baslik:
+        raise HTTPException(status_code=400, detail="Baslik bos olamaz")
+    firsatlar = dosya_oku(FIRSATLAR_DOSYA, [])
+    link = (link or "").strip() or f"manuel://{uuid.uuid4().hex}"
+    if any(f.get("link") == link for f in firsatlar):
+        raise HTTPException(status_code=400, detail="Bu link zaten kayitli")
+    simdi = datetime.now().strftime("%Y-%m-%d %H:%M")
+    yeni = {
+        "link": link,
+        "baslik": baslik[:300],
+        "kaynak_sorgu": None,
+        "bulunma_tarihi": simdi,
+        "organizator": organizator,
+        "konu_kategori": konu_kategori,
+        "son_basvuru_tarihi": son_basvuru_tarihi,
+        "onemli_tarihler": None,
+        "basvuru_asamalari": None,
+        "yer_mekan": yer_mekan,
+        "konaklama_yol_destegi": None,
+        "odul_miktari_turu": odul_miktari_turu,
+        "katilim_sartlari": katilim_sartlari,
+        "takim_buyuklugu_limiti": None,
+        "basvuru_maliyeti": None,
+        "istenen_materyal": None,
+        "sponsor_kurumlar": None,
+        "extraction_durumu": "manuel",
+        "extraction_tarihi": simdi,
+        "efor_kazanc_seviyesi": None,
+        "kaynak": "manuel",
+    }
+    firsatlar.append(yeni)
+    dosya_yaz(FIRSATLAR_DOSYA, firsatlar)
+    return {"basari": True, "eklenen": yeni}
+
+
 @app.get("/basvurular")
 def basvurulari_getir():
     return list(dosya_oku(BASVURULAR_DOSYA, {}).values())
