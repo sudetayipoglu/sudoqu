@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2 } from "lucide-react"
+import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2, List, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge, statusTone } from "@/components/status-badge"
 import { completeTask, createTask, updateTask, deleteTask, getProjeler, getOpportunities, type Task, type Proje, type Opportunity } from "@/lib/api"
@@ -28,6 +28,116 @@ function deadlineTone(value: string, done: boolean): "success" | "warning" | "pr
 const inputClass =
   "w-full rounded-lg border border-border bg-card/60 px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
 
+function TakvimGorunumu({
+  items,
+  ay,
+  setAy,
+  onGoreve,
+}: {
+  items: Task[]
+  ay: Date
+  setAy: (d: Date) => void
+  onGoreve: (t: Task) => void
+}) {
+  const yil = ay.getFullYear()
+  const ayIndex = ay.getMonth()
+  const ilkGun = new Date(yil, ayIndex, 1)
+  const sonGun = new Date(yil, ayIndex + 1, 0)
+  const gunSayisi = sonGun.getDate()
+  const baslangicBosluk = (ilkGun.getDay() + 6) % 7
+
+  const gunlereGoreGorevler = new Map<number, Task[]>()
+  for (const t of items) {
+    if (!t.deadline) continue
+    const d = new Date(t.deadline)
+    if (Number.isNaN(d.getTime())) continue
+    if (d.getFullYear() === yil && d.getMonth() === ayIndex) {
+      const arr = gunlereGoreGorevler.get(d.getDate()) || []
+      arr.push(t)
+      gunlereGoreGorevler.set(d.getDate(), arr)
+    }
+  }
+
+  const hucreler: (number | null)[] = []
+  for (let i = 0; i < baslangicBosluk; i++) hucreler.push(null)
+  for (let g = 1; g <= gunSayisi; g++) hucreler.push(g)
+  while (hucreler.length % 7 !== 0) hucreler.push(null)
+
+  const ayAdlari = ["Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz", "Agustos", "Eylul", "Ekim", "Kasim", "Aralik"]
+  const gunAdlari = ["Pzt", "Sal", "Car", "Per", "Cum", "Cmt", "Paz"]
+
+  const bugun = new Date()
+  const bugunAyniAy = bugun.getFullYear() === yil && bugun.getMonth() === ayIndex
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border bg-card/40 p-4 backdrop-blur">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setAy(new Date(yil, ayIndex - 1, 1))}
+          className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="text-sm font-medium text-foreground">
+          {ayAdlari[ayIndex]} {yil}
+        </div>
+        <button
+          type="button"
+          onClick={() => setAy(new Date(yil, ayIndex + 1, 1))}
+          className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-muted-foreground">
+        {gunAdlari.map((g) => (
+          <div key={g} className="py-1">
+            {g}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {hucreler.map((gun, i) => {
+          if (gun === null) {
+            return <div key={i} className="min-h-[72px] rounded-lg border border-transparent" />
+          }
+          const gorevler = gunlereGoreGorevler.get(gun) || []
+          const bugunMu = bugunAyniAy && bugun.getDate() === gun
+          return (
+            <div
+              key={i}
+              className={cn(
+                "min-h-[72px] rounded-lg border p-1 text-left",
+                bugunMu ? "border-primary/50 bg-primary/10" : "border-border bg-card/60",
+              )}
+            >
+              <div className={cn("mb-1 text-[11px]", bugunMu ? "font-semibold text-primary" : "text-muted-foreground")}>{gun}</div>
+              <div className="space-y-1">
+                {gorevler.slice(0, 3).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onGoreve(t)}
+                    title={t.baslik}
+                    className={cn(
+                      "block w-full truncate rounded px-1 py-0.5 text-left text-[10px] transition-colors",
+                      t.tamamlandi ? "bg-success/15 text-success" : "bg-primary/15 text-primary hover:bg-primary/25",
+                    )}
+                  >
+                    {t.baslik}
+                  </button>
+                ))}
+                {gorevler.length > 3 && <div className="text-[10px] text-muted-foreground">+{gorevler.length - 3} daha</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function TasksTab({
   items,
   onCompleted,
@@ -42,6 +152,8 @@ export function TasksTab({
   const [pending, setPending] = useState<string | null>(null)
   const [siliniyor, setSiliniyor] = useState<string | null>(null)
   const [filterKisi, setFilterKisi] = useState<string>("hepsi")
+  const [gorunum, setGorunum] = useState<"liste" | "takvim">("liste")
+  const [takvimAy, setTakvimAy] = useState<Date>(() => { const d = new Date(); d.setDate(1); return d })
 
   const [formAcik, setFormAcik] = useState(false)
   const [baslik, setBaslik] = useState("")
@@ -253,6 +365,31 @@ export function TasksTab({
         </Reveal>
       )}
 
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => setGorunum("liste")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 transition-colors",
+            gorunum === "liste" ? "border-primary/50 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <List className="h-3.5 w-3.5" />
+          Liste
+        </button>
+        <button
+          type="button"
+          onClick={() => setGorunum("takvim")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 transition-colors",
+            gorunum === "takvim" ? "border-primary/50 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          Takvim
+        </button>
+      </div>
+
       {ekip.length > 0 && (
         <div className="flex flex-wrap gap-2">
           <button
@@ -281,7 +418,9 @@ export function TasksTab({
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {gorunum === "takvim" ? (
+        <TakvimGorunumu items={filtered} ay={takvimAy} setAy={setTakvimAy} onGoreve={(t) => { setGorunum("liste"); handleDuzenleBaslat(t) }} />
+      ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/40 py-16 text-center text-sm text-muted-foreground">
           Henüz görev bulunamadı.
         </div>
