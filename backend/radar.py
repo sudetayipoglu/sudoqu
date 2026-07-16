@@ -82,7 +82,7 @@ def _rotasyonlu_arama(sorgu, **kwargs):
 # --- V1.3: Tavily Extract + Gemini yapisal veri cikarim pipeline'i (pilot testte dogrulandi) ---
 import time as _time
 from urllib.parse import urlparse
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
@@ -248,7 +248,7 @@ TEST_LIMIT = None
 
 class OpportunityExtract(BaseModel):
     organizator: Optional[str] = None
-    konu_kategori: Optional[str] = None
+    konu_kategori: Optional[Literal["sağlık", "finans", "sürdürülebilirlik", "yeşil teknoloji", "afet", "emlak", "eğitim", "yapay zeka", "diğer"]] = None
     son_basvuru_tarihi: Optional[str] = None
     onemli_tarihler: Optional[str] = None
     basvuru_asamalari: Optional[str] = None
@@ -260,6 +260,9 @@ class OpportunityExtract(BaseModel):
     basvuru_maliyeti: Optional[str] = None
     istenen_materyal: Optional[str] = None
     sponsor_kurumlar: Optional[str] = None
+    etkinlik_turu: Optional[Literal["hackathon", "datathon", "ideathon", "hibe"]] = None
+    format_turu: Optional[Literal["yüzyüze", "online", "hibrit"]] = None
+    ulke: Optional[str] = None
     cok_programli_liste_sayfasi: Optional[bool] = None
 
 
@@ -299,6 +302,10 @@ COK ONEMLI KURALLAR:
 3. Tarihleri HER ZAMAN YYYY-MM-DD formatina normalize et (tahmin edilebiliyorsa), yoksa null birak.
 4. onemli_tarihler alanina birden fazla tarih varsa (basvuru baslangici, on eleme, final gibi), hepsini TEK BIR serbest metin string'i icinde, virgul veya noktayla ayirarak yaz - ASLA liste/array dondurme, her zaman tek bir string olmali.
 5. Bu sayfa TEK BIR spesifik firsati (yarisma/hackathon/burs/fuar/hibe/program) degil de, BIRDEN FAZLA farkli firsati/programi bir arada listeleyen bir GENEL LISTE/INDEX/PORTAL/HABER sayfasiysa (ornek: bir etkinlik takvimi, cok sayida farkli hibe/burs/yarismayi tek sayfada siralayan bir portal, bir haber/blog anasayfasi), cok_programli_liste_sayfasi alanini true yap. Sayfa TEK bir spesifik firsati anlatiyorsa - kendi ozel alan adinda (domain) barindirilan, o firsata ozel bir mikro-site/tanitim sayfasi olsa bile - bu alani false yap. Karar SADECE sayfanin URL yapisina degil, icerdigi METNE bakarak verilmeli.
+6. konu_kategori alanini SADECE su sabit listeden sec (baska deger UYDURMA): saglik, finans, surdurulebilirlik, yesil teknoloji, afet, emlak, egitim, yapay zeka, diger. Hicbiri tam uymuyorsa "diger" yaz. Bu alan bir KONU/ALAN sinifidir, etkinlik formatini degil icerigin ait oldugu alani belirtir.
+7. etkinlik_turu alanini SADECE firsat acikca su turlerden biriyse doldur: hackathon, datathon, ideathon, hibe. Bunlarin disinda bir sey ise (ornek: burs, yarisma, konferans, sertifika programi, staj) bu alani null birak - zorla bu 4 secenekten birini secme.
+8. format_turu alanini metinde acikca belirtilen bilgiye gore doldur: "yuzyuze" (fiziksel/yerinde katilim), "online" (tamamen internet uzerinden), "hibrit" (hem yuzyuze hem online secenek var). Metinde net bilgi yoksa null birak, tahmin/uydurma yapma.
+9. ulke alanini MUTLAKA doldur: firsatin hangi ulke/ulkelere yonelik oldugunu Turkce ulke adiyla yaz (orn: "Turkiye", "Almanya"). Firsat belirli bir ulkeyle sinirli degilse, uluslararasi/global ise "Global" yaz. Metinden anlasilamiyorsa bile en olasi degeri tahmin etmek yerine "Global" yaz - bu alan asla bos kalmamali.
 
 Kaynak URL: {url}
 
