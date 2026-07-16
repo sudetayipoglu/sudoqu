@@ -191,6 +191,7 @@ class OpportunityExtract(BaseModel):
     basvuru_maliyeti: Optional[str] = None
     istenen_materyal: Optional[str] = None
     sponsor_kurumlar: Optional[str] = None
+    cok_programli_liste_sayfasi: Optional[bool] = None
 
 
 EXTRACTION_FIELDS = list(OpportunityExtract.model_fields.keys())
@@ -228,6 +229,7 @@ COK ONEMLI KURALLAR:
 2. Kaynak metin hangi dilde olursa olsun, TUM cikti alanlarini TURKCEYE CEVIREREK yaz.
 3. Tarihleri HER ZAMAN YYYY-MM-DD formatina normalize et (tahmin edilebiliyorsa), yoksa null birak.
 4. onemli_tarihler alanina birden fazla tarih varsa (basvuru baslangici, on eleme, final gibi), hepsini TEK BIR serbest metin string'i icinde, virgul veya noktayla ayirarak yaz - ASLA liste/array dondurme, her zaman tek bir string olmali.
+5. Bu sayfa TEK BIR spesifik firsati (yarisma/hackathon/burs/fuar/hibe/program) degil de, BIRDEN FAZLA farkli firsati/programi bir arada listeleyen bir GENEL LISTE/INDEX/PORTAL/HABER sayfasiysa (ornek: bir etkinlik takvimi, cok sayida farkli hibe/burs/yarismayi tek sayfada siralayan bir portal, bir haber/blog anasayfasi), cok_programli_liste_sayfasi alanini true yap. Sayfa TEK bir spesifik firsati anlatiyorsa - kendi ozel alan adinda (domain) barindirilan, o firsata ozel bir mikro-site/tanitim sayfasi olsa bile - bu alani false yap. Karar SADECE sayfanin URL yapisina degil, icerdigi METNE bakarak verilmeli.
 
 Kaynak URL: {url}
 
@@ -275,13 +277,6 @@ def extract_tek_kayit(tavily_client, kayit):
     url = kayit.get("link", "")
     simdi = datetime.now().isoformat(timespec="seconds")
 
-    if is_root_page(url):
-        kayit.update(bos_extraction_alanlari())
-        kayit["extraction_durumu"] = "atlandi_genel_sayfa"
-        kayit["extraction_tarihi"] = simdi
-        print(f"  [atlandi_genel_sayfa] {url}")
-        return None
-
     tav = call_tavily_extract(tavily_client, url)
     if not tav["success"]:
         kayit.update(bos_extraction_alanlari())
@@ -305,11 +300,18 @@ def extract_tek_kayit(tavily_client, kayit):
 
     gem = call_gemini_extract(url, tav["raw_content"])
     if gem["success"]:
+        parsed = gem["parsed"] or {}
         for alan in EXTRACTION_FIELDS:
-            kayit[alan] = gem["parsed"].get(alan) if gem["parsed"] else None
-        kayit["extraction_durumu"] = "basarili"
-        kayit["extraction_tarihi"] = simdi
-        print(f"  [basarili] in={gem['input_tokens']} out={gem['output_tokens']} - {url}")
+            kayit[alan] = parsed.get(alan)
+        if parsed.get("cok_programli_liste_sayfasi"):
+            kayit.update(bos_extraction_alanlari())
+            kayit["extraction_durumu"] = "atlandi_genel_sayfa"
+            kayit["extraction_tarihi"] = simdi
+            print(f"   [atlandi_genel_sayfa - icerik analizi] in={gem['input_tokens']} out={gem['output_tokens']} - {url}")
+        else:
+            kayit["extraction_durumu"] = "basarili"
+            kayit["extraction_tarihi"] = simdi
+            print(f"   [basarili] in={gem['input_tokens']} out={gem['output_tokens']} - {url}")
         return {"input_tokens": gem["input_tokens"] or 0, "output_tokens": gem["output_tokens"] or 0}
 
     if gem.get("kota_doldu"):
