@@ -87,6 +87,7 @@ _FIRSATLAR_COLS = [
     "konaklama_yol_destegi", "odul_miktari_turu", "katilim_sartlari",
     "takim_buyuklugu_limiti", "basvuru_maliyeti", "istenen_materyal",
     "sponsor_kurumlar", "extraction_durumu", "extraction_tarihi", "efor_seviyesi", "kaynak",
+    "etkinlik_turu", "format_turu", "ulke",
 ]
 
 
@@ -128,6 +129,7 @@ def save_firsatlar(items):
                     f.get("extraction_tarihi") or None,
                     f.get("efor_kazanc_seviyesi") or f.get("efor_seviyesi"),
                     f.get("kaynak") or "radar",
+                    f.get("etkinlik_turu"), f.get("format_turu"), f.get("ulke"),
                 )
                 cur.execute(
                     """INSERT INTO firsatlar
@@ -135,8 +137,9 @@ def save_firsatlar(items):
                      son_basvuru_tarihi, onemli_tarihler, basvuru_asamalari, yer_mekan,
                      konaklama_yol_destegi, odul_miktari_turu, katilim_sartlari,
                      takim_buyuklugu_limiti, basvuru_maliyeti, istenen_materyal,
-                     sponsor_kurumlar, extraction_durumu, extraction_tarihi, efor_seviyesi, kaynak)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     sponsor_kurumlar, extraction_durumu, extraction_tarihi, efor_seviyesi, kaynak,
+                     etkinlik_turu, format_turu, ulke)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (link) DO UPDATE SET
                       baslik=EXCLUDED.baslik, kaynak_sorgu=EXCLUDED.kaynak_sorgu,
                       bulunma_tarihi=EXCLUDED.bulunma_tarihi, organizator=EXCLUDED.organizator,
@@ -148,7 +151,8 @@ def save_firsatlar(items):
                       basvuru_maliyeti=EXCLUDED.basvuru_maliyeti, istenen_materyal=EXCLUDED.istenen_materyal,
                       sponsor_kurumlar=EXCLUDED.sponsor_kurumlar, extraction_durumu=EXCLUDED.extraction_durumu,
                       extraction_tarihi=EXCLUDED.extraction_tarihi, efor_seviyesi=EXCLUDED.efor_seviyesi,
-                      kaynak=EXCLUDED.kaynak""",
+                      kaynak=EXCLUDED.kaynak,
+                      etkinlik_turu=EXCLUDED.etkinlik_turu, format_turu=EXCLUDED.format_turu, ulke=EXCLUDED.ulke""",
                     vals,
                 )
             cur.execute("SELECT id, link FROM firsatlar")
