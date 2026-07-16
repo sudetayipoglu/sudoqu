@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ArrowUpRight, CalendarDays, Check, Loader2, Plus, Search, Sparkles, X } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
-import { markApplied, getProjeler, getSudolaSonOneri, addManualFirsat, type Opportunity, type Proje, type SudolaSonOneri } from "@/lib/api"
+import { markApplied, getProjeler, getSudolaSonOneri, addManualFirsat, setTakipDurumu, type Opportunity, type Proje, type SudolaSonOneri } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { SudolaPanel } from "@/components/sudola-panel"
 import {
@@ -101,6 +101,7 @@ export function OpportunitiesTab({
   const [manuelKatilimSartlari, setManuelKatilimSartlari] = useState("")
   const [manuelGonderiliyor, setManuelGonderiliyor] = useState(false)
   const [manuelHata, setManuelHata] = useState<string | null>(null)
+  const [takipPending, setTakipPending] = useState<string | null>(null)
 
   useEffect(() => {
     getProjeler().then(setProjeler).catch(() => {})
@@ -465,84 +466,48 @@ export function OpportunitiesTab({
                   </a>
                 )}
 
-                <button
-                  type="button"
-                  onClick={(e) => {
-                  e.stopPropagation()
-                  acBasvuruSecici(o)
-                }}
-                  disabled={o.basvuruldu || pending === o.id}
-                  className={cn(
-                    "mt-auto inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
-                    o.basvuruldu
-                      ? "cursor-default border border-success/30 bg-success/10 text-success"
-                      : "bg-primary text-primary-foreground hover:brightness-110 glow-primary",
-                  )}
-                >
-                  {pending === o.id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> İşaretleniyor
-                    </>
-                  ) : o.basvuruldu ? (
-                    <>
-                      <Check className="h-4 w-4" /> İşaretlendi
-                    </>
-                  ) : (
-                    "Başvur olarak işaretle"
-                  )}
-                </button>
-                  {basvuruAcikId === o.id && !o.basvuruldu && (
-                    <div
-                      className="mt-3 space-y-2 rounded-xl border border-border bg-card/60 p-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <label className="block text-xs font-medium text-muted-foreground">
-                        İlişkili proje (opsiyonel)
-                      </label>
-                      <select
-                        value={basvuruSecim[o.id] ?? ""}
-                        onChange={(e) => setBasvuruSecim((m) => ({ ...m, [o.id]: e.target.value }))}
-                        className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+                    <div className="mt-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          setTakipPending(o.id)
+                          try {
+                            await setTakipDurumu(o.link || o.id, "basvurulacak")
+                            onChanged?.()
+                          } catch (err) {
+                            console.log("[v0] setTakipDurumu error:", (err as Error).message)
+                          } finally {
+                            setTakipPending(null)
+                          }
+                        }}
+                        disabled={takipPending === o.id}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-card/60 px-3 py-2.5 text-xs font-medium text-foreground transition-all hover:brightness-110"
                       >
-                        <option value="">Proje seçme</option>
-                        {projeler.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.ad}
-                          </option>
-                        ))}
-                      </select>
-                      {basvuruOnerisi[o.id]?.onerilenProjeAdi && (
-                        <p className="text-xs text-muted-foreground">
-                          Sudo önerisi:{" "}
-                          <span className="font-medium text-foreground">
-                            {basvuruOnerisi[o.id]?.onerilenProjeAdi}
-                          </span>
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleApply(o, basvuruSecim[o.id] || undefined)}
-                          disabled={pending === o.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-all hover:brightness-110"
-                        >
-                          {pending === o.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Check className="h-3.5 w-3.5" />
-                          )}
-                          Onayla
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBasvuruAcikId(null)}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          Vazgeç
-                        </button>
-                      </div>
+                        {takipPending === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Başvurulacak
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          setTakipPending(o.id)
+                          try {
+                            await setTakipDurumu(o.link || o.id, "basvuruldu")
+                            onChanged?.()
+                          } catch (err) {
+                            console.log("[v0] setTakipDurumu error:", (err as Error).message)
+                          } finally {
+                            setTakipPending(null)
+                          }
+                        }}
+                        disabled={takipPending === o.id}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-xs font-medium text-primary-foreground transition-all hover:brightness-110 glow-primary"
+                      >
+                        {takipPending === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Başvuruldu
+                      </button>
                     </div>
-                  )}
               </article>
             </Reveal>
           ))}
