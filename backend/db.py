@@ -88,6 +88,7 @@ _FIRSATLAR_COLS = [
     "takim_buyuklugu_limiti", "basvuru_maliyeti", "istenen_materyal",
     "sponsor_kurumlar", "extraction_durumu", "extraction_tarihi", "efor_seviyesi", "kaynak",
     "etkinlik_turu", "format_turu", "ulke",
+    "takip_durumu",
 ]
 
 
@@ -130,6 +131,7 @@ def save_firsatlar(items):
                     f.get("efor_kazanc_seviyesi") or f.get("efor_seviyesi"),
                     f.get("kaynak") or "radar",
                     f.get("etkinlik_turu"), f.get("format_turu"), f.get("ulke"),
+                    f.get("takip_durumu"),
                 )
                 cur.execute(
                     """INSERT INTO firsatlar
@@ -138,8 +140,8 @@ def save_firsatlar(items):
                      konaklama_yol_destegi, odul_miktari_turu, katilim_sartlari,
                      takim_buyuklugu_limiti, basvuru_maliyeti, istenen_materyal,
                      sponsor_kurumlar, extraction_durumu, extraction_tarihi, efor_seviyesi, kaynak,
-                     etkinlik_turu, format_turu, ulke)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                     etkinlik_turu, format_turu, ulke, takip_durumu)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON CONFLICT (link) DO UPDATE SET
                       baslik=EXCLUDED.baslik, kaynak_sorgu=EXCLUDED.kaynak_sorgu,
                       bulunma_tarihi=EXCLUDED.bulunma_tarihi, organizator=EXCLUDED.organizator,
@@ -152,7 +154,7 @@ def save_firsatlar(items):
                       sponsor_kurumlar=EXCLUDED.sponsor_kurumlar, extraction_durumu=EXCLUDED.extraction_durumu,
                       extraction_tarihi=EXCLUDED.extraction_tarihi, efor_seviyesi=EXCLUDED.efor_seviyesi,
                       kaynak=EXCLUDED.kaynak,
-                      etkinlik_turu=EXCLUDED.etkinlik_turu, format_turu=EXCLUDED.format_turu, ulke=EXCLUDED.ulke""",
+                      etkinlik_turu=EXCLUDED.etkinlik_turu, format_turu=EXCLUDED.format_turu, ulke=EXCLUDED.ulke, takip_durumu=EXCLUDED.takip_durumu""",
                     vals,
                 )
             cur.execute("SELECT id, link FROM firsatlar")
@@ -410,13 +412,13 @@ def save_basvurular(veri):
                 mevcut = cur.fetchone()
                 if mevcut:
                     cur.execute(
-                        "UPDATE basvurular SET durum=%s, proje_id=%s WHERE firsat_id=%s",
-                        (b.get("durum"), b.get("proje_id"), fid),
+                        "UPDATE basvurular SET durum=%s, proje_id=%s, basvuru_notu=%s, basvuru_dosyalari=%s WHERE firsat_id=%s",
+                        (b.get("durum"), b.get("proje_id"), b.get("not") or "", json.dumps(b.get("dosyalar") or [], ensure_ascii=False), fid),
                     )
                 else:
                     cur.execute(
-                        "INSERT INTO basvurular (firsat_id, proje_id, durum, basvuru_tarihi) VALUES (%s,%s,%s,%s)",
-                        (fid, b.get("proje_id"), b.get("durum"), None),
+                        "INSERT INTO basvurular (firsat_id, proje_id, durum, basvuru_tarihi, basvuru_notu, basvuru_dosyalari) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (fid, b.get("proje_id"), b.get("durum"), None, b.get("not") or "", json.dumps(b.get("dosyalar") or [], ensure_ascii=False)),
                     )
         conn.commit()
     finally:

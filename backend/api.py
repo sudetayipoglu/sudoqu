@@ -32,6 +32,7 @@ TASKLAR_DOSYA = "tasklar.json"
 EKIP_DOSYA = "ekip.json"
 PROJELER_DOSYA = "projeler.json"
 PROJE_DOSYALARI_DIR = "proje_dosyalari"
+BASVURU_DOSYALARI_DIR = "basvuru_dosyalari"
 IZIN_VERILEN_UZANTILAR = {".pdf", ".docx", ".png", ".jpg", ".jpeg", ".zip"}
 MAKS_DOSYA_BOYUTU = 10 * 1024 * 1024  # 10 MB
 MAKS_METIN_UZUNLUGU = 5000
@@ -96,12 +97,48 @@ def tavily_anahtar_durumu_getir():
 @app.get("/firsatlar")
 def firsatlari_getir():
     tumu = dosya_oku(FIRSATLAR_DOSYA, [])
-    return [f for f in tumu if f.get("extraction_durumu") != "atlandi_genel_sayfa"]
+    return [f for f in tumu if f.get("extraction_durumu") != "atlandi_genel_sayfa" and not f.get("takip_durumu")]
 
 @app.get("/genel-sayfalar")
 def genel_sayfalari_getir():
     tumu = dosya_oku(FIRSATLAR_DOSYA, [])
     return [f for f in tumu if f.get("extraction_durumu") == "atlandi_genel_sayfa"]
+
+
+@app.get("/firsatlar-takip")
+def firsatlar_takip_getir():
+    tumu = dosya_oku(FIRSATLAR_DOSYA, [])
+    return [f for f in tumu if f.get("takip_durumu") in ("basvurulacak", "basvuruldu")]
+
+
+@app.put("/firsatlar/{link:path}/takip-durumu")
+def firsatlar_takip_durumu_guncelle(link: str, takip_durumu: str = ""):
+    gecerli = {"", "basvurulacak", "basvuruldu"}
+    if takip_durumu not in gecerli:
+        raise HTTPException(status_code=400, detail=f"Gecersiz takip durumu, izin verilenler: {sorted(gecerli)}")
+    tumu = dosya_oku(FIRSATLAR_DOSYA, [])
+    hedef = None
+    for f in tumu:
+        if f.get("link") == link:
+            f["takip_durumu"] = takip_durumu or None
+            hedef = f
+            break
+    if hedef is None:
+        raise HTTPException(status_code=404, detail="Firsat bulunamadi")
+    dosya_yaz(FIRSATLAR_DOSYA, tumu)
+    if takip_durumu:
+        basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+        if link not in basvurular:
+            basvurular[link] = {
+                "baslik": hedef.get("baslik", ""),
+                "link": link,
+                "durum": "beklemede",
+                "proje_id": None,
+                "not": "",
+                "dosyalar": [],
+            }
+            dosya_yaz(BASVURULAR_DOSYA, basvurular)
+    return hedef
 
 @app.post("/firsatlar/manuel")
 def firsat_manuel_ekle(
@@ -153,6 +190,69 @@ def firsat_manuel_ekle(
 @app.get("/basvurular")
 def basvurulari_getir():
     return list(dosya_oku(BASVURULAR_DOSYA, {}).values())
+
+@app.put("/basvurular/{link:path}/not")
+def basvuru_not_guncelle(link: str, metin: str = ""):
+    basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+    if link not in basvurular:
+        raise HTTPException(status_code=404, detail="Basvuru bulunamadi")
+    basvurular[link]["not"] = metin
+    dosya_yaz(BASVURULAR_DOSYA, basvurular)
+    return basvurular[link]
+
+
+@app.post("/basvurular/{link:path}/dosya")
+async def basvuru_dosya_yukle(link: str, file: UploadFile = File(...)):
+    basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+    if link not in basvurular:
+        raise HTTPException(status_code=404, detail="Basvuru bulunamadi")
+    icerik = await file.read()
+    if len(icerik) > MAKS_DOSYA_BOYUTU:
+        raise HTTPException(status_code=400, detail="Dosya boyutu 10MB sinirini asiyor")
+
+    klasor_adi = re.sub(r"[^\w.-]", "_", link)[:150]
+    hedef_dizin = os.path.join(BASVURU_DOSYALARI_DIR, klasor_adi)
+    os.makedirs(hedef_dizin, exist_ok=True)
+
+    guvenli_ad = re.sub(r"[^\w.\-]", "_", file.filename or "dosya")
+    hedef_yol = os.path.join(hedef_dizin, guvenli_ad)
+    with open(hedef_yol, "wb") as f:
+        f.write(icerik)
+
+    basvurular[link].setdefault("dosyalar", []).append({
+        "ad": guvenli_ad,
+        "tarih": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "boyut": len(icerik),
+    })
+    dosya_yaz(BASVURULAR_DOSYA, basvurular)
+    return basvurular[link]
+
+
+@app.get("/basvurular/{link:path}/dosya/{dosya_adi}")
+def basvuru_dosya_indir(link: str, dosya_adi: str):
+    klasor_adi = re.sub(r"[^\w.-]", "_", link)[:150]
+    guvenli_ad = re.sub(r"[^\w.\-]", "_", dosya_adi)
+    yol = os.path.join(BASVURU_DOSYALARI_DIR, klasor_adi, guvenli_ad)
+    if not os.path.exists(yol):
+        raise HTTPException(status_code=404, detail="Dosya bulunamadi")
+    return FileResponse(yol, filename=guvenli_ad)
+
+
+@app.delete("/basvurular/{link:path}/dosya/{dosya_adi}")
+def basvuru_dosya_sil(link: str, dosya_adi: str):
+    basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+    if link not in basvurular:
+        raise HTTPException(status_code=404, detail="Basvuru bulunamadi")
+    guvenli_ad = re.sub(r"[^\w.\-]", "_", dosya_adi)
+    dosyalar = basvurular[link].get("dosyalar", [])
+    basvurular[link]["dosyalar"] = [d for d in dosyalar if d.get("ad") != guvenli_ad]
+    dosya_yaz(BASVURULAR_DOSYA, basvurular)
+    klasor_adi = re.sub(r"[^\w.-]", "_", link)[:150]
+    yol = os.path.join(BASVURU_DOSYALARI_DIR, klasor_adi, guvenli_ad)
+    if os.path.exists(yol):
+        os.remove(yol)
+    return {"basari": True}
+
 
 @app.post("/basvurular/{link:path}")
 def basvuru_ekle(link: str, proje_id: str = None):
