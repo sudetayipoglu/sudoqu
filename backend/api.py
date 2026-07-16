@@ -81,7 +81,13 @@ def anasayfa():
 
 @app.get("/firsatlar")
 def firsatlari_getir():
-    return dosya_oku(FIRSATLAR_DOSYA, [])
+    tumu = dosya_oku(FIRSATLAR_DOSYA, [])
+    return [f for f in tumu if f.get("extraction_durumu") != "atlandi_genel_sayfa"]
+
+@app.get("/genel-sayfalar")
+def genel_sayfalari_getir():
+    tumu = dosya_oku(FIRSATLAR_DOSYA, [])
+    return [f for f in tumu if f.get("extraction_durumu") == "atlandi_genel_sayfa"]
 
 @app.post("/firsatlar/manuel")
 def firsat_manuel_ekle(

@@ -2,16 +2,18 @@
 
 import { useMemo, useState } from "react"
 import useSWR from "swr"
-import { AlertTriangle, CalendarCheck, FileText, FolderGit2, Loader2, RefreshCw, Sparkles, Target } from "lucide-react"
+import { AlertTriangle, CalendarCheck, FileText, FolderGit2, Layers, Loader2, RefreshCw, Sparkles, Target } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { suresiGecmisMi } from "@/lib/opportunity-utils"
 import { OpportunitiesTab } from "@/components/opportunities-tab"
 import { TasksTab } from "@/components/tasks-tab"
 import { ApplicationsTab } from "@/components/applications-tab"
 import { ProjelerTab } from "@/components/projeler-tab"
+import { GenelSayfalarTab } from "@/components/genel-sayfalar-tab"
 import {
   getApplications,
   getOpportunities,
+  getGenelSayfalar,
   getTasks,
   getProjeler,
   getEkip,
@@ -22,10 +24,11 @@ import {
 } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-type TabKey = "firsatlar" | "tasklar" | "basvurular" | "projeler"
+type TabKey = "firsatlar" | "genelSayfalar" | "tasklar" | "basvurular" | "projeler"
 
 const TABS: { key: TabKey; label: string; icon: typeof Target }[] = [
   { key: "firsatlar", label: "Fırsatlar", icon: Target },
+  { key: "genelSayfalar", label: "Genel Sayfalar", icon: Layers },
   { key: "tasklar", label: "Task & Takvim", icon: CalendarCheck },
   { key: "basvurular", label: "Başvurularım", icon: FileText },
   { key: "projeler", label: "Projelerimiz", icon: FolderGit2 },
@@ -36,12 +39,14 @@ export function Dashboard() {
   const [highlightLink, setHighlightLink] = useState<string | null>(null)
 
   const opportunities = useSWR<Opportunity[]>("firsatlar", getOpportunities)
+  const genelSayfalar = useSWR<Opportunity[]>("genel-sayfalar", getGenelSayfalar)
   const tasks = useSWR<Task[]>("tasklar", getTasks)
   const applications = useSWR<Application[]>("basvurular", getApplications)
   const projeler = useSWR<Proje[]>("projeler", getProjeler)
   const ekip = useSWR<string[]>("ekip", getEkip)
 
   const opps = opportunities.data ?? []
+  const genelSayfalarList = genelSayfalar.data ?? []
   const gecerliOpps = useMemo(
     () => opps.filter((o) => !o.duplicateOf && !suresiGecmisMi(o.sonBasvuruTarihi)),
     [opps],
@@ -160,7 +165,8 @@ export function Dashboard() {
       ) : (
         <section>
           {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} onChanged={() => opportunities.mutate()} />}
-          {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
+          {tab === "genelSayfalar" && <GenelSayfalarTab items={genelSayfalarList} />}
+        {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
           {tab === "basvurular" && <ApplicationsTab items={apps} onChanged={() => applications.mutate()} onGoToOpportunity={(link) => { setTab("firsatlar"); setHighlightLink(link) }} />}
         {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}
         </section>
