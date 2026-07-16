@@ -37,6 +37,9 @@ export interface Opportunity {
   sponsorKurumlar: string | null
   duplicateOf: string | null
   eforKazancSeviyesi: string | null
+  etkinlikTuru: string | null
+  formatTuruBackend: string | null
+  ulke: string | null
 }
 
 export interface Task {
@@ -134,6 +137,9 @@ export async function getOpportunities(): Promise<Opportunity[]> {
     sponsorKurumlar: pickNullable(r, ["sponsor_kurumlar"]),
     duplicateOf: pickNullable(r, ["duplicate_of"]),
     eforKazancSeviyesi: pickNullable(r, ["efor_kazanc_seviyesi"]),
+    etkinlikTuru: pickNullable(r, ["etkinlik_turu"]),
+    formatTuruBackend: pickNullable(r, ["format_turu"]),
+    ulke: pickNullable(r, ["ulke"]),
     raw: r,
   }))
 }
@@ -161,6 +167,9 @@ export async function getGenelSayfalar(): Promise<Opportunity[]> {
     sponsorKurumlar: pickNullable(r, ["sponsor_kurumlar"]),
     duplicateOf: pickNullable(r, ["duplicate_of"]),
     eforKazancSeviyesi: pickNullable(r, ["efor_kazanc_seviyesi"]),
+    etkinlikTuru: pickNullable(r, ["etkinlik_turu"]),
+    formatTuruBackend: pickNullable(r, ["format_turu"]),
+    ulke: pickNullable(r, ["ulke"]),
     raw: r,
   }))
 }

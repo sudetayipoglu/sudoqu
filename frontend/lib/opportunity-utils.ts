@@ -107,3 +107,56 @@ export function siralaFirsatlar(items: Opportunity[], siralama: SiralamaTuru): O
     return 0
   })
 }
+
+/* ---------- Kategori sistemi (konu / tur / format / ulke) ---------- */
+
+export const KONU_KATEGORI_SECENEKLERI = [
+  "sağlık", "finans", "sürdürülebilirlik", "yeşil teknoloji", "afet",
+  "emlak", "eğitim", "yapay zeka", "diğer",
+] as const
+
+export const KONU_KATEGORI_ETIKET: Record<string, string> = {
+  "sağlık": "Sağlık",
+  "finans": "Finans",
+  "sürdürülebilirlik": "Sürdürülebilirlik",
+  "yeşil teknoloji": "Yeşil Teknoloji",
+  "afet": "Afet",
+  "emlak": "Emlak",
+  "eğitim": "Eğitim",
+  "yapay zeka": "Yapay Zeka",
+  "diğer": "Diğer",
+}
+
+export const ETKINLIK_TURU_SECENEKLERI = ["hackathon", "datathon", "ideathon", "hibe"] as const
+
+export const ETKINLIK_TURU_ETIKET: Record<string, string> = {
+  hackathon: "Hackathon",
+  datathon: "Datathon",
+  ideathon: "Ideathon",
+  hibe: "Hibe",
+}
+
+export const FORMAT_TURU_SECENEKLERI = ["yuzyuze", "online", "hibrit"] as const
+
+export const FORMAT_TURU_ETIKET: Record<string, string> = {
+  yuzyuze: "Yuz Yuze",
+  online: "Online",
+  hibrit: "Hibrit",
+}
+
+// Backend'den gelen format_turu Turkce karakterli olabilir ("yuzyuze" -> normalize)
+function normalizeFormatDegeri(deger: string): string {
+  const d = deger.toLowerCase()
+  if (d === "yüzyüze" || d.includes("yüz")) return "yuzyuze"
+  if (d.includes("hibrit")) return "hibrit"
+  if (d.includes("online")) return "online"
+  return d
+}
+
+// Backend alanini oncelikli kullan, yoksa eski yerMekan-bazli tahmine dus
+export function formatTuruEtkin(o: Opportunity): string | null {
+  if (o.formatTuruBackend) return normalizeFormatDegeri(o.formatTuruBackend)
+  const tahmin = formatTuruHesapla(o.yerMekan)
+  if (tahmin === "belirtilmemis") return null
+  return tahmin === "yuz_yuze" ? "yuzyuze" : tahmin
+}

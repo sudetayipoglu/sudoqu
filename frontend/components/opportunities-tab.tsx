@@ -8,14 +8,18 @@ import { markApplied, getProjeler, getSudolaSonOneri, addManualFirsat, type Oppo
 import { cn } from "@/lib/utils"
 import { SudolaPanel } from "@/components/sudola-panel"
 import {
-  formatTuruHesapla,
-  FORMAT_ETIKET,
   maliyetDurumuHesapla,
   MALIYET_ETIKET,
   suresiGecmisMi,
   siralaFirsatlar,
+  formatTuruEtkin,
+  KONU_KATEGORI_SECENEKLERI,
+  KONU_KATEGORI_ETIKET,
+  ETKINLIK_TURU_SECENEKLERI,
+  ETKINLIK_TURU_ETIKET,
+  FORMAT_TURU_SECENEKLERI,
+  FORMAT_TURU_ETIKET,
   type SiralamaTuru,
-  type FormatTuru,
   type MaliyetDurumu,
 } from "@/lib/opportunity-utils"
 
@@ -75,8 +79,10 @@ export function OpportunitiesTab({
   const [selected, setSelected] = useState<Opportunity | null>(null)
   const [sudolaClicked, setSudolaClicked] = useState(false)
   const [siralama, setSiralama] = useState<SiralamaTuru>("son_basvuru")
-  const [seciliTurler, setSeciliTurler] = useState<Set<string>>(new Set())
-  const [seciliFormatlar, setSeciliFormatlar] = useState<Set<FormatTuru>>(new Set())
+  const [seciliKonu, setSeciliKonu] = useState<string>("")
+  const [seciliEtkinlikTuru, setSeciliEtkinlikTuru] = useState<string>("")
+  const [seciliFormat, setSeciliFormat] = useState<string>("")
+  const [seciliUlke, setSeciliUlke] = useState<string>("")
   const [seciliMaliyetler, setSeciliMaliyetler] = useState<Set<MaliyetDurumu>>(new Set())
   const [gosterilenSayisi, setGosterilenSayisi] = useState(60)
 
@@ -102,7 +108,7 @@ export function OpportunitiesTab({
 
   useEffect(() => {
     setGosterilenSayisi(60)
-  }, [query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
+  }, [query, seciliKonu, seciliEtkinlikTuru, seciliFormat, seciliUlke, seciliMaliyetler, siralama])
 
   useEffect(() => {
     if (!initialLink) return
@@ -118,27 +124,13 @@ export function OpportunitiesTab({
     [items],
   )
 
-  const turSecenekleri = useMemo(() => {
+  const ulkeSecenekleri = useMemo(() => {
     const s = new Set<string>()
     visibleItems.forEach((o) => {
-      if (o.konuKategori) s.add(o.konuKategori)
+      if (o.ulke) s.add(o.ulke)
     })
     return Array.from(s).sort((a, b) => a.localeCompare(b, "tr"))
   }, [visibleItems])
-
-  function toggleTur(value: string) {
-    const next = new Set(seciliTurler)
-    if (next.has(value)) next.delete(value)
-    else next.add(value)
-    setSeciliTurler(next)
-  }
-
-  function toggleFormat(value: FormatTuru) {
-    const next = new Set(seciliFormatlar)
-    if (next.has(value)) next.delete(value)
-    else next.add(value)
-    setSeciliFormatlar(next)
-  }
 
   function toggleMaliyet(value: MaliyetDurumu) {
     const next = new Set(seciliMaliyetler)
@@ -153,18 +145,24 @@ export function OpportunitiesTab({
       ? visibleItems.filter((o) => o.baslik.toLowerCase().includes(q) || o.link.toLowerCase().includes(q))
       : visibleItems
 
-    if (seciliTurler.size > 0) {
-      sonuc = sonuc.filter((o) => o.konuKategori && seciliTurler.has(o.konuKategori))
+    if (seciliKonu) {
+      sonuc = sonuc.filter((o) => o.konuKategori === seciliKonu)
     }
-    if (seciliFormatlar.size > 0) {
-      sonuc = sonuc.filter((o) => seciliFormatlar.has(formatTuruHesapla(o.yerMekan)))
+    if (seciliEtkinlikTuru) {
+      sonuc = sonuc.filter((o) => o.etkinlikTuru === seciliEtkinlikTuru)
+    }
+    if (seciliFormat) {
+      sonuc = sonuc.filter((o) => formatTuruEtkin(o) === seciliFormat)
+    }
+    if (seciliUlke) {
+      sonuc = sonuc.filter((o) => o.ulke === seciliUlke)
     }
     if (seciliMaliyetler.size > 0) {
       sonuc = sonuc.filter((o) => seciliMaliyetler.has(maliyetDurumuHesapla(o.basvuruMaliyeti)))
     }
 
     return siralaFirsatlar(sonuc, siralama)
-  }, [visibleItems, query, seciliTurler, seciliFormatlar, seciliMaliyetler, siralama])
+  }, [visibleItems, query, seciliKonu, seciliEtkinlikTuru, seciliFormat, seciliUlke, seciliMaliyetler, siralama])
 
   const gosterilecekler = useMemo(() => filtered.slice(0, gosterilenSayisi), [filtered, gosterilenSayisi])
 
@@ -343,41 +341,59 @@ export function OpportunitiesTab({
           <option value="region">Bolgeye gore</option>
         </select>
 
-        {turSecenekleri.map((tur) => (
-          <button
-            key={tur}
-            type="button"
-            onClick={() => toggleTur(tur)}
-            className={cn(
-              "rounded-full border px-3 py-1 transition-colors",
-              seciliTurler.has(tur)
-                ? "border-primary/50 bg-primary/15 text-primary"
-                : "border-border bg-card/60 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {tur}
-          </button>
+      <select
+        value={seciliKonu}
+        onChange={(e) => setSeciliKonu(e.target.value)}
+        className="rounded-lg border border-border bg-card/60 px-3 py-1.5 text-xs text-foreground outline-none"
+      >
+        <option value="">Tum konular</option>
+        {KONU_KATEGORI_SECENEKLERI.map((k) => (
+          <option key={k} value={k}>
+            {KONU_KATEGORI_ETIKET[k]}
+          </option>
         ))}
+      </select>
 
-        {(Object.keys(FORMAT_ETIKET) as FormatTuru[])
-          .filter((f) => f !== "belirtilmemis")
-          .map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => toggleFormat(f)}
-              className={cn(
-                "rounded-full border px-3 py-1 transition-colors",
-                seciliFormatlar.has(f)
-                  ? "border-cyan/50 bg-cyan/15 text-cyan"
-                  : "border-border bg-card/60 text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {FORMAT_ETIKET[f]}
-            </button>
-          ))}
+      <select
+        value={seciliEtkinlikTuru}
+        onChange={(e) => setSeciliEtkinlikTuru(e.target.value)}
+        className="rounded-lg border border-border bg-card/60 px-3 py-1.5 text-xs text-foreground outline-none"
+      >
+        <option value="">Tum turler</option>
+        {ETKINLIK_TURU_SECENEKLERI.map((t) => (
+          <option key={t} value={t}>
+            {ETKINLIK_TURU_ETIKET[t]}
+          </option>
+        ))}
+      </select>
 
-        {(Object.keys(MALIYET_ETIKET) as MaliyetDurumu[])
+      <select
+        value={seciliFormat}
+        onChange={(e) => setSeciliFormat(e.target.value)}
+        className="rounded-lg border border-border bg-card/60 px-3 py-1.5 text-xs text-foreground outline-none"
+      >
+        <option value="">Tum formatlar</option>
+        {FORMAT_TURU_SECENEKLERI.map((f) => (
+          <option key={f} value={f}>
+            {FORMAT_TURU_ETIKET[f]}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={seciliUlke}
+        onChange={(e) => setSeciliUlke(e.target.value)}
+        className="rounded-lg border border-border bg-card/60 px-3 py-1.5 text-xs text-foreground outline-none"
+      >
+        <option value="">Tum ulkeler</option>
+        {ulkeSecenekleri.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+      </select>
+
+      {(Object.keys(MALIYET_ETIKET) as MaliyetDurumu[])
           .filter((m) => m !== "belirtilmemis")
           .map((m) => (
             <button
