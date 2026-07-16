@@ -124,7 +124,7 @@ export function Dashboard() {
           <StatChip label="Başvuru" value={apps.length} tone="cyan" />
           <StatChip
             label="Başvurulan fırsat"
-            value={opps.filter((o) => o.basvuruldu).length}
+            value={apps.length}
             tone="success"
           />
         </div>
