@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import json
 import os
+import shutil
 import re
 import time
 import uuid
@@ -427,6 +428,49 @@ def proje_dosya_indir(proje_id: str, dosya_adi: str):
     if not os.path.exists(yol):
         raise HTTPException(status_code=404, detail="Dosya bulunamadi")
     return FileResponse(yol, filename=guvenli_ad)
+
+
+@app.delete("/projeler/{proje_id}")
+def proje_sil(proje_id: str):
+    """Bir projeyi siler. Iliskili gorevler (tasklar) ve basvurular SILINMEZ -
+    sadece bu projeye olan baglantilari kaldirilir (proje_id = None). Boylece bir
+    basvuruya bagli projeyi sildiginizde basvurunun kendisi kaybolmaz, sadece
+    'hangi projeyle iliskili' bilgisi temizlenir. Proje notlari ve yuklenen
+    dosyalarin veritabani kayitlari (DB modunda ON DELETE CASCADE ile) otomatik
+    silinir; fiziksel dosyalar asagida ayrica temizlenir."""
+    if _db.DATABASE_URL:
+        silindi = _db.delete_proje(proje_id)
+    else:
+        projeler = dosya_oku(PROJELER_DOSYA, [])
+        yeni_liste = [p for p in projeler if p.get("id") != proje_id]
+        silindi = len(yeni_liste) != len(projeler)
+        if silindi:
+            dosya_yaz(PROJELER_DOSYA, yeni_liste)
+            tasklar = dosya_oku(TASKLAR_DOSYA, [])
+            degisti = False
+            for t in tasklar:
+                if t.get("proje_id") == proje_id:
+                    t["proje_id"] = None
+                    degisti = True
+            if degisti:
+                dosya_yaz(TASKLAR_DOSYA, tasklar)
+            basvurular = dosya_oku(BASVURULAR_DOSYA, {})
+            degisti = False
+            for _link, b in basvurular.items():
+                if b.get("proje_id") == proje_id:
+                    b["proje_id"] = None
+                    degisti = True
+            if degisti:
+                dosya_yaz(BASVURULAR_DOSYA, basvurular)
+
+    if not silindi:
+        raise HTTPException(status_code=404, detail="Proje bulunamadı")
+
+    dizin = os.path.join(PROJE_DOSYALARI_DIR, proje_id)
+    if os.path.isdir(dizin):
+        shutil.rmtree(dizin, ignore_errors=True)
+
+    return {"basari": True, "silinen_id": proje_id}
 
 
 # --- V1.5: sudola chatbot (Tavily arastirma + Gemini soru-cevap / oneri) ---

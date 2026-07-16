@@ -234,6 +234,32 @@ def save_projeler(items):
         conn.close()
 
 
+
+def delete_proje(proje_id):
+    """Bir projeyi siler. Iliskili kayitlari koruyup sadece proje baglantisini
+    kaldirir (unlink): tasklar.proje_id, basvurular.proje_id, sudola_onerileri.onerilen_proje_id
+    NULL yapilir - gorevler ve basvurular SILINMEZ, sadece projeyle iliskisi kesilir.
+    proje_notlar ve proje_dosyalar tablolari ON DELETE CASCADE ile otomatik silinir.
+    Fiziksel dosyalar (proje_dosyalari/{proje_id}/ dizini) burada silinmez - cagiran
+    (api.py) tarafta ayrica silinmelidir.
+    Return: True eger proje bulunup silindiyse, False eger boyle bir proje yoksa.
+    """
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE tasklar SET proje_id = NULL WHERE proje_id = %s", (proje_id,))
+            cur.execute("UPDATE basvurular SET proje_id = NULL WHERE proje_id = %s", (proje_id,))
+            cur.execute(
+                "UPDATE sudola_onerileri SET onerilen_proje_id = NULL WHERE onerilen_proje_id = %s",
+                (proje_id,),
+            )
+            cur.execute("DELETE FROM projeler WHERE id = %s", (proje_id,))
+            silindi = cur.rowcount > 0
+        conn.commit()
+        return silindi
+    finally:
+        conn.close()
+
 def load_ekip():
     conn = get_conn()
     try:
