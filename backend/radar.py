@@ -385,10 +385,25 @@ if SKIP_SEARCH:
     print("RADAR_SKIP_SEARCH=1: yeni arama atlaniyor, sadece mevcut henuz_islenmedi kayitlar icin extraction calisacak.\n")
 else:
     print(f"Toplam {len(sorgular)} sorgu ile tarama başlıyor...\n")
+    son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
+    son_arama_tarihi = None
+    if os.path.exists(son_arama_dosyasi):
+        try:
+            with open(son_arama_dosyasi, "r", encoding="utf-8") as _sf:
+                son_arama_tarihi = json.load(_sf).get("son_arama_tarihi")
+        except Exception:
+            son_arama_tarihi = None
+    if son_arama_tarihi:
+        print(f"Onceki basarili arama tarihi: {son_arama_tarihi} - Tavily aramalari bu tarihten itibaren filtrelenecek (start_date).\n")
+    else:
+        print("Onceki arama tarihi kaydi bulunamadi (ilk calisma) - tam kapsamli arama yapiliyor.\n")
     for i, sorgu in enumerate(sorgular, 1):
         print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
         try:
-            response = client.search(query=sorgu)
+            if son_arama_tarihi:
+                response = client.search(query=sorgu, start_date=son_arama_tarihi)
+            else:
+                response = client.search(query=sorgu)
             for result in response["results"]:
                 url = result["url"]
                 if url not in bulunanlar:
@@ -400,6 +415,13 @@ else:
                     }
         except Exception as e:
             print(f"  Hata: {e}")
+
+if not SKIP_SEARCH:
+    _son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
+    _yeni_tarih = datetime.now().strftime("%Y-%m-%d")
+    with open(_son_arama_dosyasi, "w", encoding="utf-8") as _sf:
+        json.dump({"son_arama_tarihi": _yeni_tarih}, _sf)
+    print(f"Son basarili arama tarihi guncellendi: {_yeni_tarih}\n")
 
 if _db.DATABASE_URL:
     mevcut_liste = _db.load_firsatlar()
