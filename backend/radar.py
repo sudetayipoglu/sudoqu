@@ -10,6 +10,75 @@ import db as _db
 api_key = get_secret_or_env("tavily-api-key", "TAVILY_API_KEY")
 client = TavilyClient(api_key=api_key)
 
+# --- Coklu Tavily API key rotasyonu (kredi tukenince siradaki key'e gecer, dairesel) ---
+from tavily.errors import UsageLimitExceededError
+from ulke_dil_sorgulari import ULKE_BILGI, DIL_SORGULARI
+
+TAVILY_ANAHTAR_TANIMLARI = [
+    ("tavily-api-key", "TAVILY_API_KEY"), ("tavily-api-key-2", "TAVILY_API_KEY_2"),
+    ("tavily-api-key-3", "TAVILY_API_KEY_3"), ("tavily-api-key-4", "TAVILY_API_KEY_4"),
+    ("tavily-api-key-5", "TAVILY_API_KEY_5"), ("tavily-api-key-6", "TAVILY_API_KEY_6"),
+    ("tavily-api-key-7", "TAVILY_API_KEY_7"), ("tavily-api-key-8", "TAVILY_API_KEY_8"),
+    ("tavily-api-key-9", "TAVILY_API_KEY_9"),
+]
+TAVILY_ANAHTARLARI = []
+for _secret_id, _env_var in TAVILY_ANAHTAR_TANIMLARI:
+    try:
+        _val = get_secret_or_env(_secret_id, _env_var)
+    except Exception:
+        _val = None
+    if _val:
+        TAVILY_ANAHTARLARI.append(_val)
+if not TAVILY_ANAHTARLARI:
+    TAVILY_ANAHTARLARI = [api_key]
+print(f"[tavily] {len(TAVILY_ANAHTARLARI)} adet API key yuklendi (rotasyonlu).\n")
+
+_ANAHTAR_DURUM_DOSYA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tavily_anahtar_durumu.json")
+
+def _anahtar_durumu_oku():
+    if os.path.exists(_ANAHTAR_DURUM_DOSYA):
+        try:
+            with open(_ANAHTAR_DURUM_DOSYA, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"aktif_key_index": 0, "ardisik_tam_tur_basarisiz": 0, "alarm_aktif": False, "alarm_mesaji": None, "alarm_tarihi": None}
+
+def _anahtar_durumu_yaz(durum):
+    with open(_ANAHTAR_DURUM_DOSYA, "w", encoding="utf-8") as f:
+        json.dump(durum, f, ensure_ascii=False, indent=2)
+
+_tavily_durum = _anahtar_durumu_oku()
+
+def _rotasyonlu_arama(sorgu, **kwargs):
+    global _tavily_durum
+    n = len(TAVILY_ANAHTARLARI)
+    baslangic = _tavily_durum.get("aktif_key_index", 0) % n
+    for deneme in range(n):
+        idx = (baslangic + deneme) % n
+        try:
+            gecici_client = TavilyClient(api_key=TAVILY_ANAHTARLARI[idx])
+            sonuc = gecici_client.search(query=sorgu, **kwargs)
+            if _tavily_durum.get("aktif_key_index") != idx or _tavily_durum.get("ardisik_tam_tur_basarisiz", 0) != 0 or _tavily_durum.get("alarm_aktif"):
+                _tavily_durum["aktif_key_index"] = idx
+                _tavily_durum["ardisik_tam_tur_basarisiz"] = 0
+                _tavily_durum["alarm_aktif"] = False
+                _tavily_durum["alarm_mesaji"] = None
+                _anahtar_durumu_yaz(_tavily_durum)
+            return sonuc
+        except UsageLimitExceededError:
+            print(f"   [tavily] key #{idx+1}/{n} kota/limit doldu, siradaki key deneniyor...")
+            continue
+    _tavily_durum["aktif_key_index"] = baslangic
+    _tavily_durum["ardisik_tam_tur_basarisiz"] = _tavily_durum.get("ardisik_tam_tur_basarisiz", 0) + 1
+    if _tavily_durum["ardisik_tam_tur_basarisiz"] >= 2 and not _tavily_durum.get("alarm_aktif"):
+        _tavily_durum["alarm_aktif"] = True
+        _tavily_durum["alarm_mesaji"] = f"Tum Tavily API key'leri ({n} adet) art arda {_tavily_durum['ardisik_tam_tur_basarisiz']} tam tur boyunca kota/limit asimina ugradi."
+        _tavily_durum["alarm_tarihi"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    _anahtar_durumu_yaz(_tavily_durum)
+    raise UsageLimitExceededError(f"Tum {n} Tavily key de kota/limit asimina ugradi (sorgu: {sorgu})")
+
+
 # --- V1.3: Tavily Extract + Gemini yapisal veri cikarim pipeline'i (pilot testte dogrulandi) ---
 import time as _time
 from urllib.parse import urlparse
@@ -364,6 +433,18 @@ for kelime in genel_kategoriler["tr"] + loanword_latin + programlar_tr:
 
 for kelime in genel_kategoriler["en"] + loanword_latin + programlar_en:
     sorgular.append(f"{kelime} {yil} application")
+
+kurum_tipi_en = [
+    "government innovation challenge", "university student challenge",
+    "defense ministry technology challenge", "space agency challenge",
+    "corporate sponsored hackathon", "public sector innovation grant",
+    "research institute open call", "EU funded innovation call",
+]
+for kelime in kurum_tipi_en:
+    sorgular.append(f"{kelime} {yil} application")
+
+EN_TEMEL_SORGULAR = [f"{k} {yil} application" for k in (genel_kategoriler["en"] + loanword_latin + programlar_en + kurum_tipi_en)]
+
 for kelime in genel_kategoriler["de"] + loanword_latin + programlar_de:
     sorgular.append(f"{kelime} {yil}")
 for kelime in genel_kategoriler["fr"] + loanword_latin + programlar_fr:
@@ -403,9 +484,9 @@ else:
         print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
         try:
             if son_arama_tarihi:
-                response = client.search(query=sorgu, start_date=son_arama_tarihi)
+                response = _rotasyonlu_arama(sorgu, start_date=son_arama_tarihi, max_results=20)
             else:
-                response = client.search(query=sorgu)
+                response = _rotasyonlu_arama(sorgu, max_results=20)
             for result in response["results"]:
                 url = result["url"]
                 if url not in bulunanlar:
@@ -423,6 +504,67 @@ if not SKIP_SEARCH:
     _yeni_tarih = datetime.now().strftime("%Y-%m-%d")
     with open(_son_arama_dosyasi, "w", encoding="utf-8") as _sf:
         json.dump({"son_arama_tarihi": _yeni_tarih}, _sf)
+
+if not SKIP_SEARCH:
+    _ULKE_DURUM_DOSYA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ulke_taramasi_durumu.json")
+    _ulke_son_tarih = None
+    if os.path.exists(_ULKE_DURUM_DOSYA):
+        try:
+            with open(_ULKE_DURUM_DOSYA, "r", encoding="utf-8") as _uf:
+                _ulke_son_tarih = json.load(_uf).get("son_tarama_tarihi")
+        except Exception:
+            _ulke_son_tarih = None
+
+    _ulke_taramasi_gerekli = True
+    if _ulke_son_tarih:
+        try:
+            _gecen_gun = (datetime.now() - datetime.strptime(_ulke_son_tarih, "%Y-%m-%d")).days
+            _ulke_taramasi_gerekli = _gecen_gun >= 10
+        except Exception:
+            _ulke_taramasi_gerekli = True
+
+    if _ulke_taramasi_gerekli:
+        _ulke_sorgu_listesi = []
+        for _ulke_adi, (_dil, _country_param) in ULKE_BILGI.items():
+            if _ulke_adi == "turkiye":
+                continue
+            for _q in EN_TEMEL_SORGULAR:
+                _ulke_sorgu_listesi.append((_q, _country_param))
+            if _dil != "en" and _dil in DIL_SORGULARI:
+                for _q in DIL_SORGULARI[_dil]:
+                    _ulke_sorgu_listesi.append((_q, _country_param))
+
+        print(f"\nUlke taramasi basliyor ({len(_ulke_sorgu_listesi)} sorgu, ~10 gunde bir calisir)...\n")
+        for _ui, (_usorgu, _ucountry) in enumerate(_ulke_sorgu_listesi, 1):
+            print(f"[ulke {_ui}/{len(_ulke_sorgu_listesi)}] ({_ucountry}) Araniyor: {_usorgu}")
+            try:
+                _ukwargs = {"max_results": 20, "country": _ucountry}
+                if son_arama_tarihi:
+                    _ukwargs["start_date"] = son_arama_tarihi
+                _uresponse = _rotasyonlu_arama(_usorgu, **_ukwargs)
+                for _uresult in _uresponse["results"]:
+                    _uurl = _uresult["url"]
+                    if _uurl not in bulunanlar:
+                        bulunanlar[_uurl] = {
+                            "baslik": _uresult["title"],
+                            "link": _uurl,
+                            "kaynak_sorgu": f"{_usorgu} [country={_ucountry}]",
+                            "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        }
+            except Exception as _ue:
+                print(f"   Hata: {_ue}")
+
+        with open(_ULKE_DURUM_DOSYA, "w", encoding="utf-8") as _uf:
+            json.dump({"son_tarama_tarihi": datetime.now().strftime("%Y-%m-%d")}, _uf)
+        print(f"Ulke taramasi tamamlandi, sonraki tarama ~10 gun sonra.\n")
+
+        if _db.DATABASE_URL:
+            _db.save_firsatlar(list(bulunanlar.values()))
+        else:
+            json.dump(list(bulunanlar.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    else:
+        print(f"Ulke taramasi atlandi - son tarama {_ulke_son_tarih}, henuz 10 gun gecmedi.\n")
+
     print(f"Son basarili arama tarihi guncellendi: {_yeni_tarih}\n")
 
 if _db.DATABASE_URL:
