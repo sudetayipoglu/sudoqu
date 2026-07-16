@@ -1,12 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { FolderGit2, ExternalLink, Star, Upload, Download, Plus, X, Loader2 } from "lucide-react"
+import { FolderGit2, ExternalLink, Star, Upload, Download, Plus, X, Loader2, Trash2 } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge } from "@/components/status-badge"
 import {
   addProjeNot,
   createProje,
+  deleteProje,
   projeDosyaUrl,
   updateProjeDurum,
   uploadProjeDosya,
@@ -30,6 +31,7 @@ export function ProjelerTab({ items, onChanged }: { items: Proje[]; onChanged: (
   const [secili, setSecili] = useState<Proje | null>(null)
   const [notMetni, setNotMetni] = useState("")
   const [notGonderiliyor, setNotGonderiliyor] = useState(false)
+  const [siliniyor, setSiliniyor] = useState<string | null>(null)
   const [dosyaYukleniyor, setDosyaYukleniyor] = useState(false)
   const [dosyaHata, setDosyaHata] = useState<string | null>(null)
 
@@ -60,6 +62,26 @@ export function ProjelerTab({ items, onChanged }: { items: Proje[]; onChanged: (
     onChanged()
     if (secili?.id === proje.id) {
       setSecili({ ...proje, durum: yeniDurum })
+    }
+  }
+
+  async function handleSil(proje: Proje, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (
+      !window.confirm(
+        `"${proje.ad}" projesini silmek istediginize emin misiniz? Bu islem geri alinamaz. (Iliskili gorevler ve basvurular silinmeyecek, sadece bu projeyle baglantilari kaldirilacak.)`,
+      )
+    )
+      return
+    setSiliniyor(proje.id)
+    try {
+      await deleteProje(proje.id)
+      if (secili?.id === proje.id) setSecili(null)
+      onChanged()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Proje silinemedi")
+    } finally {
+      setSiliniyor(null)
     }
   }
 
@@ -170,6 +192,15 @@ export function ProjelerTab({ items, onChanged }: { items: Proje[]; onChanged: (
                     <FolderGit2 className="h-4 w-4" />
                   </span>
                   <StatusBadge tone={DURUM_TONE[p.durum] ?? "muted"}>{p.durum}</StatusBadge>
+                  <button
+                    type="button"
+                    onClick={(e) => handleSil(p, e)}
+                    disabled={siliniyor === p.id}
+                    title="Projeyi sil"
+                    className="ml-auto rounded-md p-1.5 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive disabled:opacity-60"
+                  >
+                    {siliniyor === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
                 <h3 className="text-pretty text-lg font-semibold leading-snug text-foreground">{p.ad}</h3>
                 {p.aciklama && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{p.aciklama}</p>}

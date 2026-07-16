@@ -322,6 +322,14 @@ export async function updateProjeDurum(id: string, durum: string): Promise<void>
   if (!res.ok) throw new Error(`Proje guncellenemedi (${res.status})`)
 }
 
+export async function deleteProje(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/projeler/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+  })
+  if (!res.ok) throw new Error(`Proje silinemedi (${res.status})`)
+}
+
 export async function addProjeNot(id: string, metin: string): Promise<void> {
   const params = new URLSearchParams({ metin })
   const res = await fetch(`${API_BASE}/projeler/${encodeURIComponent(id)}/not?${params.toString()}`, {
