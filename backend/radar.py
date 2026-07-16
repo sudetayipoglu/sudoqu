@@ -263,7 +263,7 @@ Kaynak URL: {url}
                 _time.sleep(wait_s)
                 continue
             break
-    return {"success": False, "parsed": None, "input_tokens": 0, "output_tokens": 0, "error": last_err}
+    return {"success": False, "parsed": None, "input_tokens": 0, "output_tokens": 0, "error": last_err, "kota_doldu": gecici_hata}
 
 
 def bos_extraction_alanlari():
@@ -312,6 +312,12 @@ def extract_tek_kayit(tavily_client, kayit):
         print(f"  [basarili] in={gem['input_tokens']} out={gem['output_tokens']} - {url}")
         return {"input_tokens": gem["input_tokens"] or 0, "output_tokens": gem["output_tokens"] or 0}
 
+    if gem.get("kota_doldu"):
+        # Kalici/gecici kota hatasi (429/503) - retry'lar tukendi ama bu GERCEK bir
+        # extraction basarisizligi degil. Kaydi "basarisiz" olarak damgalamiyoruz,
+        # "henuz_islenmedi" durumunda birakiyoruz ki bir sonraki calisma tekrar denesin.
+        print(f"   [kota/gecici hata - henuz_islenmedi olarak birakildi] {gem['error'][:100]} - {url}")
+        return {"input_tokens": 0, "output_tokens": 0, "kota_doldu": True}
     kayit.update(bos_extraction_alanlari())
     kayit["extraction_durumu"] = "basarisiz"
     kayit["extraction_tarihi"] = simdi
@@ -453,6 +459,10 @@ for idx, kayit in enumerate(islenecekler):
         _db.save_firsatlar(list(mevcut_dict.values()))
     else:
         json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    if sonuc and sonuc.get("kota_doldu"):
+        kalan = len(islenecekler) - idx - 1
+        print(f"\nGunluk Gemini kotasi dolmus gorunuyor - kalan {kalan} kayit henuz_islenmedi olarak birakilip bir sonraki calismaya birakiliyor.")
+        break
     if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
         _time.sleep(GEMINI_MIN_INTERVAL)
 
