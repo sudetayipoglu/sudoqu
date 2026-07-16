@@ -17,6 +17,8 @@ import {
   getTasks,
   getProjeler,
   getEkip,
+  getTavilyDurum,
+  type TavilyDurum,
   type Application,
   type Opportunity,
   type Task,
@@ -44,6 +46,7 @@ export function Dashboard() {
   const applications = useSWR<Application[]>("basvurular", getApplications)
   const projeler = useSWR<Proje[]>("projeler", getProjeler)
   const ekip = useSWR<string[]>("ekip", getEkip)
+  const tavilyDurum = useSWR<TavilyDurum>("tavily-durum", getTavilyDurum, { refreshInterval: 5 * 60 * 1000 })
 
   const opps = opportunities.data ?? []
   const genelSayfalarList = genelSayfalar.data ?? []
@@ -86,6 +89,18 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+        {tavilyDurum.data?.alarm_aktif && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-red-600">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div className="text-sm leading-snug">
+              <span className="font-semibold">Tavily API sorunu: </span>
+              {tavilyDurum.data.alarm_mesaji ?? "Tum Tavily API key'leri kota limitine ulasti."}
+              {tavilyDurum.data.alarm_tarihi && (
+                <span className="ml-1 text-red-500/70">({tavilyDurum.data.alarm_tarihi})</span>
+              )}
+            </div>
+          </div>
+        )}
       {/* Header */}
       <Reveal as="header" className="mb-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">

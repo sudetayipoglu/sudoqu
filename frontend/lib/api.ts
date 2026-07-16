@@ -1,5 +1,19 @@
 export const API_BASE = "http://34.30.225.219:8000"
 
+export interface TavilyDurum {
+  aktif_key_index: number
+  ardisik_tam_tur_basarisiz: number
+  alarm_aktif: boolean
+  alarm_mesaji: string | null
+  alarm_tarihi: string | null
+}
+
+export async function getTavilyDurum(): Promise<TavilyDurum> {
+  const res = await fetch(`${API_BASE}/tavily-anahtar-durumu`)
+  if (!res.ok) throw new Error("Tavily durumu alinamadi")
+  return res.json()
+}
+
 /* ---------- Types (normalized) ---------- */
 export interface Opportunity {
   id: string

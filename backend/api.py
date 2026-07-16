@@ -79,6 +79,20 @@ def dosya_yaz(yol, veri):
 def anasayfa():
     return {"durum": "SudoQu API calisiyor"}
 
+TAVILY_DURUM_DOSYA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tavily_anahtar_durumu.json")
+
+@app.get("/tavily-anahtar-durumu")
+def tavily_anahtar_durumu_getir():
+    varsayilan = {"aktif_key_index": 0, "ardisik_tam_tur_basarisiz": 0, "alarm_aktif": False, "alarm_mesaji": None, "alarm_tarihi": None}
+    if not os.path.exists(TAVILY_DURUM_DOSYA):
+        return varsayilan
+    try:
+        with open(TAVILY_DURUM_DOSYA, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return varsayilan
+
+
 @app.get("/firsatlar")
 def firsatlari_getir():
     tumu = dosya_oku(FIRSATLAR_DOSYA, [])
