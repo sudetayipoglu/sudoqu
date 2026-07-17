@@ -127,13 +127,20 @@ export const KONU_KATEGORI_ETIKET: Record<string, string> = {
   "diğer": "Diğer",
 }
 
-export const ETKINLIK_TURU_SECENEKLERI = ["hackathon", "datathon", "ideathon", "hibe"] as const
+export const ETKINLIK_TURU_SECENEKLERI = ["hackathon", "datathon", "ideathon", "hibe", "yarisma", "program", "burs", "konferans", "sertifika_programi", "staj", "diger"] as const
 
 export const ETKINLIK_TURU_ETIKET: Record<string, string> = {
   hackathon: "Hackathon",
   datathon: "Datathon",
   ideathon: "Ideathon",
   hibe: "Hibe",
+  yarisma: "Yarisma",
+  program: "Program",
+  burs: "Burs",
+  konferans: "Konferans",
+  sertifika_programi: "Sertifika Programi",
+  staj: "Staj",
+  diger: "Diger",
 }
 
 export const FORMAT_TURU_SECENEKLERI = ["yuzyuze", "online", "hibrit"] as const
