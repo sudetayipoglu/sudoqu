@@ -368,6 +368,13 @@ def extract_tek_kayit(tavily_client, kayit):
     url = kayit.get("link", "")
     simdi = datetime.now().isoformat(timespec="seconds")
 
+    if is_root_page(url):
+        kayit.update(bos_extraction_alanlari())
+        kayit["extraction_durumu"] = "atlandi_genel_sayfa"
+        kayit["extraction_tarihi"] = simdi
+        print(f"    [atlandi_genel_sayfa - kok/anasayfa linki, extraction atlandi] {url}")
+        return None
+
     tav = call_tavily_extract(tavily_client, url)
     if not tav["success"]:
         if tav.get("kota_hatasi"):
