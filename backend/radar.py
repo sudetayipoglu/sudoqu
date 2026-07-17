@@ -278,17 +278,33 @@ def is_root_page(url):
 
 
 def call_tavily_extract(tavily_client, url):
-    try:
-        result = tavily_client.extract(urls=[url], extract_depth="advanced", chunks_per_source=3)
-        results = result.get("results", [])
-        failed = result.get("failed_results", [])
-        if results:
-            raw = results[0].get("raw_content") or ""
-            return {"success": True, "raw_content": raw, "char_count": len(raw), "error": None}
-        err = failed[0].get("error") if failed else "bilinmeyen hata (bos sonuc)"
-        return {"success": False, "raw_content": "", "char_count": 0, "error": err}
-    except Exception as e:
-        return {"success": False, "raw_content": "", "char_count": 0, "error": str(e)}
+    # NOT: tavily_client parametresi geriye-donuk uyumluluk icin duruyor ama
+    # kullanilmiyor - asagida TAVILY_ANAHTARLARI uzerinden gercek rotasyon yapiliyor
+    # (eskiden burada tek/sabit client kullaniliyordu, kota dolunca diger 6 key'e hic gecilmiyordu).
+    global _tavily_durum
+    n = len(TAVILY_ANAHTARLARI)
+    baslangic = _tavily_durum.get("aktif_key_index", 0) % n
+    for deneme in range(n):
+        idx = (baslangic + deneme) % n
+        try:
+            gecici_client = TavilyClient(api_key=TAVILY_ANAHTARLARI[idx])
+            result = gecici_client.extract(urls=[url], extract_depth="advanced", chunks_per_source=3)
+            results = result.get("results", [])
+            failed = result.get("failed_results", [])
+            if _tavily_durum.get("aktif_key_index") != idx:
+                _tavily_durum["aktif_key_index"] = idx
+                _anahtar_durumu_yaz(_tavily_durum)
+            if results:
+                raw = results[0].get("raw_content") or ""
+                return {"success": True, "raw_content": raw, "char_count": len(raw), "error": None, "kota_hatasi": False}
+            err = failed[0].get("error") if failed else "bilinmeyen hata (bos sonuc)"
+            return {"success": False, "raw_content": "", "char_count": 0, "error": err, "kota_hatasi": False}
+        except UsageLimitExceededError:
+            print(f"  [tavily-extract] key #{idx+1}/{n} kota/limit doldu, siradaki key deneniyor...")
+            continue
+        except Exception as e:
+            return {"success": False, "raw_content": "", "char_count": 0, "error": str(e), "kota_hatasi": False}
+    return {"success": False, "raw_content": "", "char_count": 0, "error": f"Tum {n} Tavily key de kota/limit asimina ugradi", "kota_hatasi": True}
 
 
 def call_gemini_extract(url, raw_content):
@@ -355,6 +371,13 @@ def extract_tek_kayit(tavily_client, kayit):
 
     tav = call_tavily_extract(tavily_client, url)
     if not tav["success"]:
+        if tav.get("kota_hatasi"):
+            # Tum Tavily key'leri o an icin kota/limit asimina ugradi. Bu GERCEK bir
+            # extraction basarisizligi degil (Gemini kota_doldu mantigiyla ayni prensip).
+            # Kaydi "basarisiz" olarak damgalamiyoruz; "henuz_islenmedi" durumunda
+            # birakiyoruz ki kota acilinca/bir sonraki calismada tekrar densin.
+            print(f"  [tavily kota/gecici hata - henuz_islenmedi olarak birakildi] {tav['error'][:100]} - {url}")
+            return {"input_tokens": 0, "output_tokens": 0, "kota_doldu": True}
         kayit.update(bos_extraction_alanlari())
         kayit["extraction_durumu"] = "basarisiz"
         kayit["extraction_tarihi"] = simdi
@@ -470,188 +493,190 @@ for kelime in genel_kategoriler["zh"] + loanword_zh + programlar_zh:
 
 bulunanlar = {}
 
-SKIP_SEARCH = os.getenv("RADAR_SKIP_SEARCH", "0") == "1"
-if SKIP_SEARCH:
-    print("RADAR_SKIP_SEARCH=1: yeni arama atlaniyor, sadece mevcut henuz_islenmedi kayitlar icin extraction calisacak.\n")
-else:
-    print(f"Toplam {len(sorgular)} sorgu ile tarama başlıyor...\n")
-    son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
-    son_arama_tarihi = None
-    if os.path.exists(son_arama_dosyasi):
-        try:
-            with open(son_arama_dosyasi, "r", encoding="utf-8") as _sf:
-                son_arama_tarihi = json.load(_sf).get("son_arama_tarihi")
-        except Exception:
-            son_arama_tarihi = None
-    if son_arama_tarihi:
-        print(f"Onceki basarili arama tarihi: {son_arama_tarihi} - Tavily aramalari bu tarihten itibaren filtrelenecek (start_date).\n")
+
+if __name__ == "__main__":
+    SKIP_SEARCH = os.getenv("RADAR_SKIP_SEARCH", "0") == "1"
+    if SKIP_SEARCH:
+        print("RADAR_SKIP_SEARCH=1: yeni arama atlaniyor, sadece mevcut henuz_islenmedi kayitlar icin extraction calisacak.\n")
     else:
-        print("Onceki arama tarihi kaydi bulunamadi (ilk calisma) - tam kapsamli arama yapiliyor.\n")
-    for i, sorgu in enumerate(sorgular, 1):
-        print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
-        try:
-            if son_arama_tarihi:
-                response = _rotasyonlu_arama(sorgu, start_date=son_arama_tarihi, max_results=20)
-            else:
-                response = _rotasyonlu_arama(sorgu, max_results=20)
-            for result in response["results"]:
-                url = result["url"]
-                if url not in bulunanlar:
-                    bulunanlar[url] = {
-                        "baslik": result["title"],
-                        "link": url,
-                        "kaynak_sorgu": sorgu,
-                        "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
-                    }
-        except Exception as e:
-            print(f"  Hata: {e}")
-
-if not SKIP_SEARCH:
-    _son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
-    _yeni_tarih = datetime.now().strftime("%Y-%m-%d")
-    with open(_son_arama_dosyasi, "w", encoding="utf-8") as _sf:
-        json.dump({"son_arama_tarihi": _yeni_tarih}, _sf)
-
-if not SKIP_SEARCH:
-    _ULKE_DURUM_DOSYA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ulke_taramasi_durumu.json")
-    _ulke_son_tarih = None
-    if os.path.exists(_ULKE_DURUM_DOSYA):
-        try:
-            with open(_ULKE_DURUM_DOSYA, "r", encoding="utf-8") as _uf:
-                _ulke_son_tarih = json.load(_uf).get("son_tarama_tarihi")
-        except Exception:
-            _ulke_son_tarih = None
-
-    _ulke_taramasi_gerekli = True
-    if _ulke_son_tarih:
-        try:
-            _gecen_gun = (datetime.now() - datetime.strptime(_ulke_son_tarih, "%Y-%m-%d")).days
-            _ulke_taramasi_gerekli = _gecen_gun >= 10
-        except Exception:
-            _ulke_taramasi_gerekli = True
-
-    if _ulke_taramasi_gerekli:
-        _ulke_sorgu_listesi = []
-        for _ulke_adi, (_dil, _country_param) in ULKE_BILGI.items():
-            if _ulke_adi == "turkiye":
-                continue
-            for _q in EN_TEMEL_SORGULAR:
-                _ulke_sorgu_listesi.append((_q, _country_param))
-            if _dil != "en" and _dil in DIL_SORGULARI:
-                for _q in DIL_SORGULARI[_dil]:
-                    _ulke_sorgu_listesi.append((_q, _country_param))
-
-        print(f"\nUlke taramasi basliyor ({len(_ulke_sorgu_listesi)} sorgu, ~10 gunde bir calisir)...\n")
-        for _ui, (_usorgu, _ucountry) in enumerate(_ulke_sorgu_listesi, 1):
-            print(f"[ulke {_ui}/{len(_ulke_sorgu_listesi)}] ({_ucountry}) Araniyor: {_usorgu}")
+        print(f"Toplam {len(sorgular)} sorgu ile tarama başlıyor...\n")
+        son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
+        son_arama_tarihi = None
+        if os.path.exists(son_arama_dosyasi):
             try:
-                _ukwargs = {"max_results": 20, "country": _ucountry}
+                with open(son_arama_dosyasi, "r", encoding="utf-8") as _sf:
+                    son_arama_tarihi = json.load(_sf).get("son_arama_tarihi")
+            except Exception:
+                son_arama_tarihi = None
+        if son_arama_tarihi:
+            print(f"Onceki basarili arama tarihi: {son_arama_tarihi} - Tavily aramalari bu tarihten itibaren filtrelenecek (start_date).\n")
+        else:
+            print("Onceki arama tarihi kaydi bulunamadi (ilk calisma) - tam kapsamli arama yapiliyor.\n")
+        for i, sorgu in enumerate(sorgular, 1):
+            print(f"[{i}/{len(sorgular)}] Aranıyor: {sorgu}")
+            try:
                 if son_arama_tarihi:
-                    _ukwargs["start_date"] = son_arama_tarihi
-                _uresponse = _rotasyonlu_arama(_usorgu, **_ukwargs)
-                for _uresult in _uresponse["results"]:
-                    _uurl = _uresult["url"]
-                    if _uurl not in bulunanlar:
-                        bulunanlar[_uurl] = {
-                            "baslik": _uresult["title"],
-                            "link": _uurl,
-                            "kaynak_sorgu": f"{_usorgu} [country={_ucountry}]",
+                    response = _rotasyonlu_arama(sorgu, start_date=son_arama_tarihi, max_results=20)
+                else:
+                    response = _rotasyonlu_arama(sorgu, max_results=20)
+                for result in response["results"]:
+                    url = result["url"]
+                    if url not in bulunanlar:
+                        bulunanlar[url] = {
+                            "baslik": result["title"],
+                            "link": url,
+                            "kaynak_sorgu": sorgu,
                             "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
                         }
-            except Exception as _ue:
-                print(f"   Hata: {_ue}")
+            except Exception as e:
+                print(f"  Hata: {e}")
 
-        with open(_ULKE_DURUM_DOSYA, "w", encoding="utf-8") as _uf:
-            json.dump({"son_tarama_tarihi": datetime.now().strftime("%Y-%m-%d")}, _uf)
-        print(f"Ulke taramasi tamamlandi, sonraki tarama ~10 gun sonra.\n")
+    if not SKIP_SEARCH:
+        _son_arama_dosyasi = os.path.join(os.path.dirname(os.path.abspath(__file__)), "son_arama_durumu.json")
+        _yeni_tarih = datetime.now().strftime("%Y-%m-%d")
+        with open(_son_arama_dosyasi, "w", encoding="utf-8") as _sf:
+            json.dump({"son_arama_tarihi": _yeni_tarih}, _sf)
 
-        if _db.DATABASE_URL:
-            _db.save_firsatlar(list(bulunanlar.values()))
+    if not SKIP_SEARCH:
+        _ULKE_DURUM_DOSYA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ulke_taramasi_durumu.json")
+        _ulke_son_tarih = None
+        if os.path.exists(_ULKE_DURUM_DOSYA):
+            try:
+                with open(_ULKE_DURUM_DOSYA, "r", encoding="utf-8") as _uf:
+                    _ulke_son_tarih = json.load(_uf).get("son_tarama_tarihi")
+            except Exception:
+                _ulke_son_tarih = None
+
+        _ulke_taramasi_gerekli = True
+        if _ulke_son_tarih:
+            try:
+                _gecen_gun = (datetime.now() - datetime.strptime(_ulke_son_tarih, "%Y-%m-%d")).days
+                _ulke_taramasi_gerekli = _gecen_gun >= 10
+            except Exception:
+                _ulke_taramasi_gerekli = True
+
+        if _ulke_taramasi_gerekli:
+            _ulke_sorgu_listesi = []
+            for _ulke_adi, (_dil, _country_param) in ULKE_BILGI.items():
+                if _ulke_adi == "turkiye":
+                    continue
+                for _q in EN_TEMEL_SORGULAR:
+                    _ulke_sorgu_listesi.append((_q, _country_param))
+                if _dil != "en" and _dil in DIL_SORGULARI:
+                    for _q in DIL_SORGULARI[_dil]:
+                        _ulke_sorgu_listesi.append((_q, _country_param))
+
+            print(f"\nUlke taramasi basliyor ({len(_ulke_sorgu_listesi)} sorgu, ~10 gunde bir calisir)...\n")
+            for _ui, (_usorgu, _ucountry) in enumerate(_ulke_sorgu_listesi, 1):
+                print(f"[ulke {_ui}/{len(_ulke_sorgu_listesi)}] ({_ucountry}) Araniyor: {_usorgu}")
+                try:
+                    _ukwargs = {"max_results": 20, "country": _ucountry}
+                    if son_arama_tarihi:
+                        _ukwargs["start_date"] = son_arama_tarihi
+                    _uresponse = _rotasyonlu_arama(_usorgu, **_ukwargs)
+                    for _uresult in _uresponse["results"]:
+                        _uurl = _uresult["url"]
+                        if _uurl not in bulunanlar:
+                            bulunanlar[_uurl] = {
+                                "baslik": _uresult["title"],
+                                "link": _uurl,
+                                "kaynak_sorgu": f"{_usorgu} [country={_ucountry}]",
+                                "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
+                            }
+                except Exception as _ue:
+                    print(f"   Hata: {_ue}")
+
+            with open(_ULKE_DURUM_DOSYA, "w", encoding="utf-8") as _uf:
+                json.dump({"son_tarama_tarihi": datetime.now().strftime("%Y-%m-%d")}, _uf)
+            print(f"Ulke taramasi tamamlandi, sonraki tarama ~10 gun sonra.\n")
+
+            if _db.DATABASE_URL:
+                _db.save_firsatlar(list(bulunanlar.values()))
+            else:
+                json.dump(list(bulunanlar.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         else:
-            json.dump(list(bulunanlar.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+            print(f"Ulke taramasi atlandi - son tarama {_ulke_son_tarih}, henuz 10 gun gecmedi.\n")
+
+        print(f"Son basarili arama tarihi guncellendi: {_yeni_tarih}\n")
+
+    if _db.DATABASE_URL:
+        mevcut_liste = _db.load_firsatlar()
     else:
-        print(f"Ulke taramasi atlandi - son tarama {_ulke_son_tarih}, henuz 10 gun gecmedi.\n")
+        try:
+            with open("firsatlar.json", "r", encoding="utf-8") as f:
+                mevcut_liste = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            mevcut_liste = []
 
-    print(f"Son basarili arama tarihi guncellendi: {_yeni_tarih}\n")
-
-if _db.DATABASE_URL:
-    mevcut_liste = _db.load_firsatlar()
-else:
-    try:
-        with open("firsatlar.json", "r", encoding="utf-8") as f:
-            mevcut_liste = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        mevcut_liste = []
-
-mevcut_dict = {}
-for kayit in mevcut_liste:
-    link = kayit.get("link")
-    if not link:
-        continue
-    for alan in EXTRACTION_FIELDS:
-        kayit.setdefault(alan, None)
-    kayit.setdefault("extraction_durumu", "henuz_islenmedi")
-    kayit.setdefault("extraction_tarihi", None)
-    mevcut_dict[link] = kayit
-
-yeni_sayisi = 0
-for link, kayit in bulunanlar.items():
-    if link not in mevcut_dict:
+    mevcut_dict = {}
+    for kayit in mevcut_liste:
+        link = kayit.get("link")
+        if not link:
+            continue
         for alan in EXTRACTION_FIELDS:
             kayit.setdefault(alan, None)
-        kayit["extraction_durumu"] = "henuz_islenmedi"
-        kayit["extraction_tarihi"] = None
+        kayit.setdefault("extraction_durumu", "henuz_islenmedi")
+        kayit.setdefault("extraction_tarihi", None)
         mevcut_dict[link] = kayit
-        yeni_sayisi += 1
 
-print(f"\nBu turda {len(bulunanlar)} link tarandi, {yeni_sayisi} tanesi yeni. Toplam kayit sayisi (birikmis): {len(mevcut_dict)}")
+    yeni_sayisi = 0
+    for link, kayit in bulunanlar.items():
+        if link not in mevcut_dict:
+            for alan in EXTRACTION_FIELDS:
+                kayit.setdefault(alan, None)
+            kayit["extraction_durumu"] = "henuz_islenmedi"
+            kayit["extraction_tarihi"] = None
+            mevcut_dict[link] = kayit
+            yeni_sayisi += 1
 
-islenecekler = [k for k in mevcut_dict.values() if k.get("extraction_durumu") == "henuz_islenmedi"]
-if TEST_LIMIT is not None:
-    islenecekler = islenecekler[:TEST_LIMIT]
+    print(f"\nBu turda {len(bulunanlar)} link tarandi, {yeni_sayisi} tanesi yeni. Toplam kayit sayisi (birikmis): {len(mevcut_dict)}")
 
-print(f"Extraction calistirilacak kayit sayisi: {len(islenecekler)} (TEST_LIMIT={TEST_LIMIT})\n")
+    islenecekler = [k for k in mevcut_dict.values() if k.get("extraction_durumu") == "henuz_islenmedi"]
+    if TEST_LIMIT is not None:
+        islenecekler = islenecekler[:TEST_LIMIT]
 
-toplam_in_token, toplam_out_token = 0, 0
-basarili_sayisi, basarisiz_sayisi, atlandi_sayisi = 0, 0, 0
+    print(f"Extraction calistirilacak kayit sayisi: {len(islenecekler)} (TEST_LIMIT={TEST_LIMIT})\n")
 
-for idx, kayit in enumerate(islenecekler):
-    print(f"[{idx + 1}/{len(islenecekler)}] {kayit.get('baslik', '')[:70]}")
-    sonuc = extract_tek_kayit(client, kayit)
-    durum = kayit.get("extraction_durumu")
-    if durum == "basarili":
-        basarili_sayisi += 1
-    elif durum == "basarisiz":
-        basarisiz_sayisi += 1
-    elif durum == "atlandi_genel_sayfa":
-        atlandi_sayisi += 1
-    if sonuc:
-        toplam_in_token += sonuc["input_tokens"]
-        toplam_out_token += sonuc["output_tokens"]
+    toplam_in_token, toplam_out_token = 0, 0
+    basarili_sayisi, basarisiz_sayisi, atlandi_sayisi = 0, 0, 0
+
+    for idx, kayit in enumerate(islenecekler):
+        print(f"[{idx + 1}/{len(islenecekler)}] {kayit.get('baslik', '')[:70]}")
+        sonuc = extract_tek_kayit(client, kayit)
+        durum = kayit.get("extraction_durumu")
+        if durum == "basarili":
+            basarili_sayisi += 1
+        elif durum == "basarisiz":
+            basarisiz_sayisi += 1
+        elif durum == "atlandi_genel_sayfa":
+            atlandi_sayisi += 1
+        if sonuc:
+            toplam_in_token += sonuc["input_tokens"]
+            toplam_out_token += sonuc["output_tokens"]
+        if _db.DATABASE_URL:
+            _db.save_firsatlar(list(mevcut_dict.values()))
+        else:
+            json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+        if sonuc and sonuc.get("kota_doldu"):
+            kalan = len(islenecekler) - idx - 1
+            print(f"\nGunluk Gemini kotasi ya da Tavily kredisi dolmus gorunuyor - kalan {kalan} kayit henuz_islenmedi olarak birakilip bir sonraki calismaya birakiliyor.")
+            break
+        if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
+            _time.sleep(GEMINI_MIN_INTERVAL)
+
+    for _kayit in mevcut_dict.values():
+        _kayit["efor_kazanc_seviyesi"] = efor_kazanc_hesapla(_kayit.get("istenen_materyal"))
+
+    _dup_sayisi, _dup_gruplari = tekillestir(list(mevcut_dict.values()))
+    if _dup_sayisi:
+        print(f"\nTekillestirme: {len(_dup_gruplari)} grup, toplam {_dup_sayisi} kayit duplicate olarak isaretlendi.")
+
     if _db.DATABASE_URL:
         _db.save_firsatlar(list(mevcut_dict.values()))
     else:
-        json.dump(list(mevcut_dict.values()), open("firsatlar.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-    if sonuc and sonuc.get("kota_doldu"):
-        kalan = len(islenecekler) - idx - 1
-        print(f"\nGunluk Gemini kotasi dolmus gorunuyor - kalan {kalan} kayit henuz_islenmedi olarak birakilip bir sonraki calismaya birakiliyor.")
-        break
-    if durum != "atlandi_genel_sayfa" and idx < len(islenecekler) - 1:
-        _time.sleep(GEMINI_MIN_INTERVAL)
+        with open("firsatlar.json", "w", encoding="utf-8") as f:
+            json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
 
-for _kayit in mevcut_dict.values():
-    _kayit["efor_kazanc_seviyesi"] = efor_kazanc_hesapla(_kayit.get("istenen_materyal"))
-
-_dup_sayisi, _dup_gruplari = tekillestir(list(mevcut_dict.values()))
-if _dup_sayisi:
-    print(f"\nTekillestirme: {len(_dup_gruplari)} grup, toplam {_dup_sayisi} kayit duplicate olarak isaretlendi.")
-
-if _db.DATABASE_URL:
-    _db.save_firsatlar(list(mevcut_dict.values()))
-else:
-    with open("firsatlar.json", "w", encoding="utf-8") as f:
-        json.dump(list(mevcut_dict.values()), f, ensure_ascii=False, indent=2)
-
-print(f"\nToplam {len(mevcut_dict)} benzersiz firsat firsatlar.json dosyasina kaydedildi.")
-print(f"Extraction ozeti: basarili={basarili_sayisi}, basarisiz={basarisiz_sayisi}, atlandi_genel_sayfa={atlandi_sayisi}")
-print(f"Toplam Gemini token: input={toplam_in_token}, output={toplam_out_token}")
+    print(f"\nToplam {len(mevcut_dict)} benzersiz firsat firsatlar.json dosyasina kaydedildi.")
+    print(f"Extraction ozeti: basarili={basarili_sayisi}, basarisiz={basarisiz_sayisi}, atlandi_genel_sayfa={atlandi_sayisi}")
+    print(f"Toplam Gemini token: input={toplam_in_token}, output={toplam_out_token}")
