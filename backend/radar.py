@@ -561,13 +561,13 @@ if __name__ == "__main__":
                 if _ulke_adi == "turkiye":
                     continue
                 for _q in EN_TEMEL_SORGULAR:
-                    _ulke_sorgu_listesi.append((_q, _country_param))
+                    _ulke_sorgu_listesi.append((_q, _country_param, _ulke_adi))
                 if _dil != "en" and _dil in DIL_SORGULARI:
                     for _q in DIL_SORGULARI[_dil]:
-                        _ulke_sorgu_listesi.append((_q, _country_param))
+                        _ulke_sorgu_listesi.append((_q, _country_param, _ulke_adi))
 
             print(f"\nUlke taramasi basliyor ({len(_ulke_sorgu_listesi)} sorgu, ~10 gunde bir calisir)...\n")
-            for _ui, (_usorgu, _ucountry) in enumerate(_ulke_sorgu_listesi, 1):
+            for _ui, (_usorgu, _ucountry, _uulkeadi) in enumerate(_ulke_sorgu_listesi, 1):
                 print(f"[ulke {_ui}/{len(_ulke_sorgu_listesi)}] ({_ucountry}) Araniyor: {_usorgu}")
                 try:
                     _ukwargs = {"max_results": 20, "country": _ucountry}
@@ -581,7 +581,8 @@ if __name__ == "__main__":
                                 "baslik": _uresult["title"],
                                 "link": _uurl,
                                 "kaynak_sorgu": f"{_usorgu} [country={_ucountry}]",
-                                "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "ulke": _uulkeadi.title()
                             }
                 except Exception as _ue:
                     print(f"   Hata: {_ue}")
