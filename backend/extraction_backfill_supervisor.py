@@ -51,6 +51,21 @@ def kalan_sayisi():
     return int(cikti)
 
 
+def basarisiz_sayisi():
+    r = subprocess.run(
+        ["docker", "compose", "-f", COMPOSE_FILE, "exec", "-T", "postgres", "psql", "-U", "sudoqu", "-d", "sudoqu",
+         "-t", "-A", "-c",
+         "SELECT COUNT(*) FROM firsatlar WHERE extraction_durumu = 'basarisiz';"],
+        capture_output=True, text=True, timeout=30,
+    )
+    cikti = r.stdout.strip()
+    if r.returncode != 0 or not cikti.isdigit():
+        log(f"UYARI: basarisiz_sayisi sorgusu basarisiz oldu (returncode={r.returncode}). "
+            f"stdout={cikti!r} stderr={r.stderr.strip()!r}")
+        raise RuntimeError(f"basarisiz_sayisi: DB sorgusu gecerli bir sayi dondurmedi: {cikti!r}")
+    return int(cikti)
+
+
 def radar_calistir():
     with open(LOG_FILE, "a") as f:
         f.write(f"\n===== {datetime.now().isoformat(timespec='seconds')} - radar.py (RADAR_SKIP_SEARCH=1) turu basliyor =====\n")
@@ -71,8 +86,17 @@ def main():
             if kalan_once == 0:
                 log("Tum kayitlar islenmis. Backfill TAMAMLANDI.")
                 return 0
+            basarisiz_once = basarisiz_sayisi()
             radar_calistir()
             kalan_sonra = kalan_sayisi()
+            basarisiz_sonra = basarisiz_sayisi()
+            islenen_bu_tur = kalan_once - kalan_sonra
+            yeni_basarisiz = basarisiz_sonra - basarisiz_once
+            if islenen_bu_tur >= 10 and yeni_basarisiz / islenen_bu_tur > 0.3:
+                log(f"DURDURULDU: Bu turda {islenen_bu_tur} kayit islendi, {yeni_basarisiz} tanesi "
+                    f"basarisiz oldu (%{100*yeni_basarisiz/islenen_bu_tur:.1f}) - %30 esigini asti. "
+                    f"Kullanici talimatina gore duruluyor, rapor bekleniyor.")
+                return 2
             log(f"Tur {tur} bitti. {kalan_sonra} kayit hala 'henuz_islenmedi'.")
             if kalan_sonra == 0:
                 log("Tum kayitlar islenmis. Backfill TAMAMLANDI.")
