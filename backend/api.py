@@ -105,6 +105,14 @@ def genel_sayfalari_getir():
     return [f for f in tumu if f.get("extraction_durumu") == "atlandi_genel_sayfa"]
 
 
+@app.get("/firsatlar-tumu")
+def firsatlar_tumu_getir():
+    # Gorev formundaki firsat secici icin: takip durumuna bakmaksizin TUM firsatlari dondurur
+    # (sadece genel/kok sayfalar halen disarida birakilir).
+    tumu = dosya_oku(FIRSATLAR_DOSYA, [])
+    return [f for f in tumu if f.get("extraction_durumu") != "atlandi_genel_sayfa"]
+
+
 @app.get("/firsatlar-takip")
 def firsatlar_takip_getir():
     tumu = dosya_oku(FIRSATLAR_DOSYA, [])

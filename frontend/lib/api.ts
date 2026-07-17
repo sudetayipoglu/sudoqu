@@ -177,6 +177,37 @@ export async function getFirsatlarTakip(): Promise<Opportunity[]> {
   })) as Opportunity[]
 }
 
+export async function getFirsatlarTumu(): Promise<Opportunity[]> {
+  const rows = await getJson("/firsatlar-tumu")
+  return rows.map((r, i) => ({
+    id: pick(r, ["id", "_id", "uuid"], String(i)),
+    baslik: pick(r, ["baslik", "başlik", "title", "isim", "name"], "İsimsiz Fırsat"),
+    link: pick(r, ["link", "url", "adres"]),
+    bulunmaTarihi: pick(r, ["bulunma_tarihi", "bulunmaTarihi", "tarih", "date", "created_at", "createdAt"]),
+    basvuruldu: pickBool(r, ["basvuruldu", "başvuruldu", "applied", "isApplied"]),
+    organizator: pickNullable(r, ["organizator"]),
+    konuKategori: pickNullable(r, ["konu_kategori"]),
+    sonBasvuruTarihi: pickNullable(r, ["son_basvuru_tarihi"]),
+    onemliTarihler: pickNullable(r, ["onemli_tarihler"]),
+    basvuruAsamalari: pickNullable(r, ["basvuru_asamalari"]),
+    yerMekan: pickNullable(r, ["yer_mekan"]),
+    konaklamaYolDestegi: pickNullable(r, ["konaklama_yol_destegi"]),
+    odulMiktariTuru: pickNullable(r, ["odul_miktari_turu"]),
+    katilimSartlari: pickNullable(r, ["katilim_sartlari"]),
+    takimBuyukluguLimiti: pickNullable(r, ["takim_buyukluk_limiti"]),
+    basvuruMaliyeti: pickNullable(r, ["basvuru_maliyeti"]),
+    istenenMateryal: pickNullable(r, ["istenen_materyal"]),
+    sponsorKurumlar: pickNullable(r, ["sponsor_kurumlar"]),
+    duplicateOf: pickNullable(r, ["duplicate_of"]),
+    eforKazancSeviyesi: pickNullable(r, ["efor_kazanc_seviyesi"]),
+    etkinlikTuru: pickNullable(r, ["etkinlik_turu"]),
+    formatTuruBackend: pickNullable(r, ["format_turu"]),
+    ulke: pickNullable(r, ["ulke"]),
+    takipDurumu: pickNullable(r, ["takip_durumu"]),
+    raw: r,
+  })) as Opportunity[]
+}
+
 export async function setTakipDurumu(link: string, durum: string): Promise<void> {
   const params = new URLSearchParams({ takip_durumu: durum })
   const res = await fetch(`${API_BASE}/firsatlar/${encodeURIComponent(link)}/takip-durumu?${params.toString()}`, {

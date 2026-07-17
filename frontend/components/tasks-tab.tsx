@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2, List, CalendarDays, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge, statusTone } from "@/components/status-badge"
-import { completeTask, createTask, updateTask, deleteTask, getProjeler, getFirsatlarTakip, type Task, type Proje, type Opportunity } from "@/lib/api"
+import { completeTask, createTask, updateTask, deleteTask, getProjeler, getFirsatlarTumu, type Task, type Proje, type Opportunity } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 function formatDate(value: string) {
@@ -180,7 +180,7 @@ export function TasksTab({
 
   useEffect(() => {
     getProjeler().then(setProjeler).catch(() => {})
-    getFirsatlarTakip().then(setFirsatlar).catch(() => {})
+    getFirsatlarTumu().then(setFirsatlar).catch(() => {})
   }, [])
 
   async function handleComplete(t: Task) {
