@@ -38,7 +38,7 @@ def log(msg):
 
 def kalan_sayisi():
     r = subprocess.run(
-        ["docker-compose", "-f", COMPOSE_FILE, "exec", "-T", "postgres", "psql", "-U", "sudoqu", "-d", "sudoqu",
+        ["docker", "compose", "-f", COMPOSE_FILE, "exec", "-T", "postgres", "psql", "-U", "sudoqu", "-d", "sudoqu",
          "-t", "-A", "-c",
          "SELECT COUNT(*) FROM firsatlar WHERE extraction_durumu = 'henuz_islenmedi';"],
         capture_output=True, text=True, timeout=30,
@@ -56,7 +56,7 @@ def radar_calistir():
         f.write(f"\n===== {datetime.now().isoformat(timespec='seconds')} - radar.py (RADAR_SKIP_SEARCH=1) turu basliyor =====\n")
         f.flush()
         subprocess.run(
-            ["docker-compose", "-f", COMPOSE_FILE,
+            ["docker", "compose", "-f", COMPOSE_FILE,
              "exec", "-T", "-e", "RADAR_SKIP_SEARCH=1", "backend", "python3", "-u", "radar.py"],
             stdout=f, stderr=subprocess.STDOUT,
         )

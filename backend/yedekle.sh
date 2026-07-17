@@ -17,7 +17,7 @@ for dosya in firsatlar.json tasklar.json basvurular.json projeler.json; do
   fi
 done
 
-if sudo docker-compose -f "$COMPOSE_DOSYASI" exec -T postgres pg_dump -U sudoqu sudoqu > "$YEDEK_DIZIN/postgres_$TARIH.sql" 2>>"$YEDEK_DIZIN/yedekleme_log.txt"; then
+if docker compose -f "$COMPOSE_DOSYASI" exec -T postgres pg_dump -U sudoqu sudoqu > "$YEDEK_DIZIN/postgres_$TARIH.sql" 2>>"$YEDEK_DIZIN/yedekleme_log.txt"; then
   echo "[$(date -u)] pg_dump basarili: postgres_$TARIH.sql" >> "$YEDEK_DIZIN/yedekleme_log.txt"
 else
   echo "[$(date -u)] pg_dump BASARISIZ" >> "$YEDEK_DIZIN/yedekleme_log.txt"
