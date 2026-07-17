@@ -491,6 +491,17 @@ for kelime in genel_kategoriler["ko"] + loanword_ko + programlar_ko:
 for kelime in genel_kategoriler["zh"] + loanword_zh + programlar_zh:
     sorgular.append(f"{kelime} {yil}")
 
+CHECKPOINT_ARALIGI = 75  # arama fazinda her N sorguda bir DB'ye ara kayit (checkpoint) yapilir
+
+def _ara_kayit_yap(bulunanlar_sozlugu):
+    # Arama fazi surerken periyodik checkpoint - DB'ye yazar, sadece ekler/gunceller, silmez.
+    if _db.DATABASE_URL:
+        try:
+            _db.save_firsatlar(list(bulunanlar_sozlugu.values()))
+        except Exception as _cpe:
+            print(f"    [checkpoint] UYARI: ara kayit basarisiz oldu: {_cpe}")
+
+
 bulunanlar = {}
 
 
@@ -528,6 +539,9 @@ if __name__ == "__main__":
                             "kaynak_sorgu": sorgu,
                             "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M")
                         }
+                if i % CHECKPOINT_ARALIGI == 0:
+                    _ara_kayit_yap(bulunanlar)
+                    print(f"    [checkpoint] {i}/{len(sorgular)} sorgu sonrasi {len(bulunanlar)} kayit DB'ye yazildi.")
             except Exception as e:
                 print(f"  Hata: {e}")
 
@@ -584,6 +598,9 @@ if __name__ == "__main__":
                                 "bulunma_tarihi": datetime.now().strftime("%Y-%m-%d %H:%M"),
                                 "ulke": _uulkeadi.title()
                             }
+                    if _ui % CHECKPOINT_ARALIGI == 0:
+                        _ara_kayit_yap(bulunanlar)
+                        print(f"    [checkpoint] ulke taramasi: {_ui}/{len(_ulke_sorgu_listesi)} sorgu sonrasi {len(bulunanlar)} kayit DB'ye yazildi.")
                 except Exception as _ue:
                     print(f"   Hata: {_ue}")
 
