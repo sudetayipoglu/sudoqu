@@ -497,6 +497,43 @@ for kelime in genel_kategoriler["ko"] + loanword_ko + programlar_ko:
 for kelime in genel_kategoriler["zh"] + loanword_zh + programlar_zh:
     sorgular.append(f"{kelime} {yil}")
 
+# Sehir-nitelikli sorgular: genel kategori sorgularinin, dusuk backlink'li /
+# yeni acilmis / tek sayfalik yerel etkinlikleri (orn. sosyal medya odakli kucuk
+# hackathonlar) genel aramada yakalayamama sorununu hafifletmek icin eklendi.
+TR_SEHIRLER = [
+    "Istanbul", "Ankara", "Izmir", "Bursa", "Antalya", "Adana", "Konya",
+    "Gaziantep", "Kayseri", "Mersin", "Eskisehir", "Samsun", "Denizli",
+    "Trabzon", "Erzurum", "Malatya", "Van", "Kocaeli", "Sakarya", "Manisa",
+    "Balikesir", "Kahramanmaras", "Diyarbakir", "Sanliurfa", "Mugla", "Aydin",
+    "Tekirdag", "Ordu", "Elazig", "Sivas",
+]
+BUYUK_SEHIRLER_YURTDISI = [
+    "London", "Paris", "Berlin", "Amsterdam", "Madrid", "Barcelona", "Rome",
+    "Vienna", "Munich", "Dublin", "Stockholm", "Warsaw", "Lisbon", "Brussels",
+    "Zurich", "New York", "San Francisco", "Los Angeles", "Chicago", "Boston",
+    "Austin", "Seattle", "Washington DC",
+]
+for _sehir in TR_SEHIRLER:
+    for _kelime in loanword_latin:
+        sorgular.append(f"{_sehir} {_kelime} {yil}")
+for _sehir in BUYUK_SEHIRLER_YURTDISI:
+    for _kelime in loanword_latin:
+        sorgular.append(f"{_sehir} {_kelime} {yil}")
+
+# Kayit/basvuru formu sorgulari: kucuk/yeni etkinlikler cogunlukla kategori
+# kelimesinden cok kendi kayit sayfasi diliyle eslesir (kayit formu, basvuru).
+# NOT: "form" gibi jenerik kelimeler alakasiz sonuc da getirebilir - bu beklenen
+# bir durum, mevcut extraction/Gemini asamasi zaten alakasiz sayfalari eler
+# (bos/anlamsiz alanlar -> dusuk kaliteli veri, is_root_page/cok_programli_liste
+# kontrolleri de ayrica devrede).
+_TR_AY_ADLARI = ["Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
+                 "Agustos", "Eylul", "Ekim", "Kasim", "Aralik"]
+_bu_ay = _TR_AY_ADLARI[datetime.now().month - 1]
+for _kelime in loanword_latin:
+    sorgular.append(f"{_kelime} kayit formu {_bu_ay} {yil}")
+    sorgular.append(f"{_kelime} basvuru {_bu_ay} {yil}")
+    sorgular.append(f"{_kelime} registration form {_bu_ay} {yil}")
+
 CHECKPOINT_ARALIGI = 75  # arama fazinda her N sorguda bir DB'ye ara kayit (checkpoint) yapilir
 
 def _ara_kayit_yap(bulunanlar_sozlugu):
