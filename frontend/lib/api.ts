@@ -40,7 +40,7 @@ export interface Opportunity {
   etkinlikTuru: string | null
   formatTuruBackend: string | null
   ulke: string | null
-  takipDurumu: string | null
+  takipDurumu?: string | null
 }
 
 export interface Task {

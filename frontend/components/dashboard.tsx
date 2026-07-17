@@ -17,6 +17,7 @@ import {
   getTasks,
   getProjeler,
   getEkip,
+  getFirsatlarTakip,
   getTavilyDurum,
   type TavilyDurum,
   type Application,
@@ -45,6 +46,7 @@ export function Dashboard() {
   const tasks = useSWR<Task[]>("tasklar", getTasks)
   const applications = useSWR<Application[]>("basvurular", getApplications)
   const projeler = useSWR<Proje[]>("projeler", getProjeler)
+  const firsatlarTakip = useSWR<Opportunity[]>("firsatlar-takip", getFirsatlarTakip)
   const ekip = useSWR<string[]>("ekip", getEkip)
   const tavilyDurum = useSWR<TavilyDurum>("tavily-durum", getTavilyDurum, { refreshInterval: 5 * 60 * 1000 })
 
@@ -81,6 +83,7 @@ export function Dashboard() {
     tasks.mutate()
     applications.mutate()
     projeler.mutate()
+    firsatlarTakip.mutate()
   }
 
   const anyLoading = opportunities.isLoading || tasks.isLoading || applications.isLoading
@@ -179,10 +182,10 @@ export function Dashboard() {
         <ErrorState onRetry={refreshAll} />
       ) : (
         <section>
-          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} onChanged={() => opportunities.mutate()} />}
+          {tab === "firsatlar" && <OpportunitiesTab items={opps} onApplied={handleApplied} initialLink={highlightLink} onInitialLinkConsumed={() => setHighlightLink(null)} onChanged={() => { opportunities.mutate(); firsatlarTakip.mutate() }} />}
           {tab === "genelSayfalar" && <GenelSayfalarTab items={genelSayfalarList} />}
         {tab === "tasklar" && <TasksTab items={taskList} onCompleted={handleCompleted} ekip={ekipList} onChanged={() => tasks.mutate()} />}
-          {tab === "basvurular" && <ApplicationsTab items={apps} onChanged={() => applications.mutate()} onGoToOpportunity={(link) => { setTab("firsatlar"); setHighlightLink(link) }} />}
+          {tab === "basvurular" && <ApplicationsTab items={firsatlarTakip.data ?? []} applications={apps} onChanged={() => { firsatlarTakip.mutate(); applications.mutate() }} />}
         {tab === "projeler" && <ProjelerTab items={projeList} onChanged={() => projeler.mutate()} />}
         </section>
       )}
