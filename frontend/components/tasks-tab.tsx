@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2, List, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarClock, Check, Loader2, Tag, User, Plus, X, Pencil, Trash2, Briefcase, Link2, List, CalendarDays, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { StatusBadge, statusTone } from "@/components/status-badge"
-import { completeTask, createTask, updateTask, deleteTask, getProjeler, getOpportunities, type Task, type Proje, type Opportunity } from "@/lib/api"
+import { completeTask, createTask, updateTask, deleteTask, getProjeler, getFirsatlarTakip, type Task, type Proje, type Opportunity } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 function formatDate(value: string) {
@@ -173,12 +173,14 @@ export function TasksTab({
   const [firsatlar, setFirsatlar] = useState<Opportunity[]>([])
   const [projeId, setProjeId] = useState("")
   const [firsatId, setFirsatId] = useState("")
+  const [firsatArama, setFirsatArama] = useState("")
   const [editProjeId, setEditProjeId] = useState("")
   const [editFirsatId, setEditFirsatId] = useState("")
+  const [editFirsatArama, setEditFirsatArama] = useState("")
 
   useEffect(() => {
     getProjeler().then(setProjeler).catch(() => {})
-    getOpportunities().then(setFirsatlar).catch(() => {})
+    getFirsatlarTakip().then(setFirsatlar).catch(() => {})
   }, [])
 
   async function handleComplete(t: Task) {
@@ -348,15 +350,24 @@ export function TasksTab({
               </div>
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">Fırsat (opsiyonel)</label>
+                <input
+                  type="text"
+                  value={firsatArama}
+                  onChange={(e) => setFirsatArama(e.target.value)}
+                  placeholder="Fırsat ara..."
+                  className={`${inputClass} mb-1.5`}
+                />
                 <select
                   value={firsatId}
                   onChange={(e) => setFirsatId(e.target.value)}
                   className={inputClass}
                 >
                   <option value="">Yok</option>
-                  {firsatlar.map((f) => (
-                    <option key={f.link} value={f.link}>{f.baslik}</option>
-                  ))}
+                  {firsatlar
+                    .filter((f) => f.baslik.toLowerCase().includes(firsatArama.toLowerCase()))
+                    .map((f) => (
+                      <option key={f.link} value={f.link}>{f.baslik}</option>
+                    ))}
                 </select>
               </div>
             </div>
@@ -487,15 +498,24 @@ export function TasksTab({
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-muted-foreground">Fırsat</label>
+                    <input
+                      type="text"
+                      value={editFirsatArama}
+                      onChange={(e) => setEditFirsatArama(e.target.value)}
+                      placeholder="Fırsat ara..."
+                      className={`${inputClass} mb-1.5`}
+                    />
                     <select
                       value={editFirsatId}
                       onChange={(e) => setEditFirsatId(e.target.value)}
                       className={inputClass}
                     >
                       <option value="">Yok</option>
-                      {firsatlar.map((f) => (
-                        <option key={f.link} value={f.link}>{f.baslik}</option>
-                      ))}
+                      {firsatlar
+                        .filter((f) => f.baslik.toLowerCase().includes(editFirsatArama.toLowerCase()))
+                        .map((f) => (
+                          <option key={f.link} value={f.link}>{f.baslik}</option>
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -554,7 +574,16 @@ export function TasksTab({
                       </div>
 
                       <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-                        <Meta icon={<User className="h-3.5 w-3.5" />} label="Atanan" value={t.atanan || "—"} />
+                        <details className="group min-w-0">
+                  <summary className="flex cursor-pointer list-none items-center gap-1.5 marker:hidden">
+                    <span className="text-muted-foreground"><User className="h-3.5 w-3.5" /></span>
+                    <div className="min-w-0 flex-1">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Atanan</dt>
+                    </div>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </summary>
+                  <dd className="mt-1 truncate pl-5 text-foreground">{t.atanan || "—"}</dd>
+                </details>
                         <Meta icon={<Tag className="h-3.5 w-3.5" />} label="Tür" value={t.tur || "—"} />
             {t.projeAdi && (
               <Meta icon={<Briefcase className="h-3.5 w-3.5" />} label="Proje" value={t.projeAdi} />
