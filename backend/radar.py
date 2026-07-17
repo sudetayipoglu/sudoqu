@@ -87,8 +87,7 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
-GEMINI_API_KEY = get_secret_or_env("gemini-api-key", "GEMINI_API_KEY")
-gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+from gemini_helper import call_gemini, GEMINI_ANAHTARLARI
 
 # TEKILLESTIRME (DEDUP) MANTIGI - kural bazli, LLM kullanilmaz
 import re
@@ -332,7 +331,7 @@ Kaynak URL: {url}
     last_err = None
     for attempt in range(GEMINI_MAX_RETRIES + 1):
         try:
-            response = gemini_client.models.generate_content(
+            response = call_gemini(
                 model=GEMINI_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -391,7 +390,7 @@ def extract_tek_kayit(tavily_client, kayit):
         print(f"  [basarili] icerik bos, alanlar null - {url}")
         return None
 
-    if gemini_client is None:
+    if not GEMINI_ANAHTARLARI:
         kayit["extraction_durumu"] = "basarisiz"
         kayit["extraction_tarihi"] = simdi
         print(f"  [basarisiz] GEMINI_API_KEY yok - {url}")

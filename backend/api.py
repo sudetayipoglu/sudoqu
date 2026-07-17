@@ -604,9 +604,8 @@ from google import genai
 from google.genai import types
 
 SUDOLA_TAVILY_API_KEY = get_secret_or_env("tavily-api-key", "TAVILY_API_KEY")
-SUDOLA_GEMINI_API_KEY = get_secret_or_env("gemini-api-key", "GEMINI_API_KEY")
+from gemini_helper import call_gemini, GEMINI_ANAHTARLARI
 sudola_tavily_client = TavilyClient(api_key=SUDOLA_TAVILY_API_KEY) if SUDOLA_TAVILY_API_KEY else None
-sudola_gemini_client = genai.Client(api_key=SUDOLA_GEMINI_API_KEY) if SUDOLA_GEMINI_API_KEY else None
 SUDOLA_GEMINI_MODEL = "gemini-flash-lite-latest"
 
 _sudola_arastirma_cache = {}
@@ -696,7 +695,7 @@ def sudola_soru(link: str, soru: str):
     if not firsat:
         raise HTTPException(status_code=404, detail="Firsat bulunamadi")
 
-    if sudola_gemini_client is None:
+    if not GEMINI_ANAHTARLARI:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY yapilandirilmamis")
 
     baglam = _firsat_baglam_metni(firsat)
@@ -721,7 +720,7 @@ def sudola_soru(link: str, soru: str):
     )
 
     try:
-        response = sudola_gemini_client.models.generate_content(model=SUDOLA_GEMINI_MODEL, contents=prompt)
+        response = call_gemini(model=SUDOLA_GEMINI_MODEL, contents=prompt)
         cevap = (response.text or "").strip()
     except Exception as e:
         if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
@@ -749,7 +748,7 @@ def sudola_oneri(link: str):
     if not firsat:
         raise HTTPException(status_code=404, detail="Firsat bulunamadi")
 
-    if sudola_gemini_client is None:
+    if not GEMINI_ANAHTARLARI:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY yapilandirilmamis")
 
     baglam = _firsat_baglam_metni(firsat)
@@ -776,7 +775,7 @@ def sudola_oneri(link: str):
     )
 
     try:
-        response = sudola_gemini_client.models.generate_content(
+        response = call_gemini(
             model=SUDOLA_GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
